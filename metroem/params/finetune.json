@@ -1,0 +1,197 @@
+{
+   "4": [
+        {
+            "smoothness": 15.0E0,
+            "lr": 1.0E-5, 
+            "num_epochs": 500, 
+            "loss_spec": {
+                "type": "metric", 
+                "params": {
+                    "levels": [0],
+                    "pre_align_sample": 32 
+                }
+            },
+            "mse_keys_to_apply":{
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}
+                     }
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ]
+            },
+            "sm_keys_to_apply": {
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "mask_value": 1e-5,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "binarization": {"strat": "neq", "value": 0},
+                     "coarsen_ranges": [[1, 0.0]],
+                     "fm": 0
+                     }
+                ]
+            }
+        }
+    ],
+    "5": [
+        {
+            "smoothness": 25.0E0,
+            "lr": 1.0E-5, 
+            "num_epochs": 500, 
+            "loss_spec": {
+                "type": "metric", 
+                "params": {
+                    "levels": [0],
+                    "pre_align_sample": 32 
+                }
+            },
+            "mse_keys_to_apply":{
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ]
+            },
+            "sm_keys_to_apply": {
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "mask_value": 1e-5,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}
+                    }
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "coarsen_ranges": [[1, 0.0]],
+                     "fm": 0,
+                     "binarization": {"strat": "neq", "value": 0}
+                    }
+                ]
+            }
+
+        }
+    ],
+    "6": [
+        {
+            "smoothness": 50.0E0,
+            "lr": 3.0E-5, 
+            "num_epochs": 4000, 
+            "loss_spec": {
+                "type": "metric", 
+                "params": {
+                    "levels": [0],
+                    "pre_align_sample": 32 
+                }
+            },
+            "mse_keys_to_apply":{
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}
+                    }
+                ]
+            },
+            "sm_keys_to_apply": {
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "mask_value": 1e-5,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}
+                    }
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}
+                    }
+                ]
+            },
+            "augmentations": [ 
+                {"type": "random_transpose", "prob": 0.5},
+                {"type": "random_src_tgt_swap", "prob": 0.5},
+                {"type": "warp", "difficulty": 0, "min_disp": -8, 
+                 "max_disp": 12, "prob": 1.0, "randomize_d": false,
+                 "random_epicenters": false}
+            ] 
+        }    
+    ],
+    "7": [
+        {
+            "smoothness": 100.0E0,
+            "lr": 5.0E-6, 
+            "num_epochs": 4000, 
+            "loss_spec": {
+                "type": "metric", 
+                "params": {
+                    "levels": [0],
+                    "pre_align_sample": 16 
+                }
+            },
+            "mse_keys_to_apply":{
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ]
+            },
+            "sm_keys_to_apply": {
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "mask_value": 1e-5,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0},
+                     "fm": 0
+                    }
+                ]
+            },
+            "augmentations": [ 
+                {"type": "random_transpose", "prob": 0.5},
+                {"type": "random_src_tgt_swap", "prob": 0.5},
+                {"type": "warp", "difficulty": 0, "min_disp": -8, 
+                 "max_disp": 8, "prob": 0.8, "randomize_d": false,
+                 "random_epicenters": false}
+            ] 
+        }
+    ]
+}
