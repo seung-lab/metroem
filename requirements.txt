@@ -1,0 +1,11 @@
+h5py
+numpy
+cloud-volume
+torch
+torchvision
+git+git://https://github.com/seung-lab/modelhouse@tmacrina-load-model-simple
+#modelhouse
+scikit-image
+artificery
+torchfields
+jupyterlab
