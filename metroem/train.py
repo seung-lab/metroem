@@ -224,6 +224,9 @@ def main():
     parser.set_defaults(redirect_stdout=True)
     args = parser.parse_args()
 
+    assert(os.path.exists(args.pyramid_path))
+    assert(os.path.exists(args.dataset_path))
+
     if args.train_mode == 'custom':
         params_path = args.train_params_path
     else:
