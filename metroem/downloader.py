@@ -34,8 +34,6 @@ def make_dset(dst_path,
     if chunk_size is None:
         chunk_size = patch_size
 
-    df = h5py.File(dst_path, 'a')
-
     if data_kind in ['img', 'defects']:
         data_shape = [patch_size, patch_size]
         chunk_shape = [chunk_size, chunk_size]
@@ -44,6 +42,8 @@ def make_dset(dst_path,
         chunk_shape = [chunk_size, chunk_size, 2]
     else:
         raise Exception("Unkonw data kind {}".format(data_kind))
+
+    df = h5py.File(dst_path, 'a')
 
     dset_shape = (num_samples, 2, *data_shape)
     chunk_dim = (1, 1, *chunk_shape)
