@@ -7,6 +7,9 @@ import six
 import copy
 import argparse
 
+import torch
+import torchfields
+
 import cloudvolume as cv
 import numpy as np
 
@@ -37,7 +40,7 @@ def make_dset(dst_path,
         field:
             num_samples x 2 x patch_size x patch_size x 2
     """
-
+    print('make_dset for {}'.format(data_kind))
     if chunk_size is None:
         chunk_size = patch_size
 
@@ -62,6 +65,83 @@ def make_dset(dst_path,
             chunks=chunk_dim)
 
     return dset
+
+def write_array(dset, data, sample_index, pair_index):
+    """Write ndarray to H5 file
+    """
+    dset[sample_index, pair_index] = data
+
+def write_tensor(dset, data, sample_index, pair_index):
+    """Write tensor to H5 file
+
+    Args:
+        dset (h5py.File)
+        data (torch.Tensor): no leading identity dimensions
+        sample_index (int)
+        pair_index (int)
+    """
+    if data.is_cuda():
+        data = data.cpu()
+    data = data.numpy()
+    write_array(dset, data, sample_index, pair_index)
+
+def download_section(dsets,
+                     cvs,
+                     x_offset,
+                     y_offset,
+                     z,
+                     patch_size,
+                     sample_index,
+                     pair_index):
+    """Download section to each dset
+
+    If field is included, will download field first. Based on the field,
+    the bbox of the img and defects will be adjusted. The field will not
+    be used to warp the img and defects. Warping is handled in the 
+    dataloader.
+
+    Args:
+        dsets (dict): data_kind: H5 file
+        cvs (dict): data_kind: CloudVolume
+        x_offset (int)
+        y_offset (int)
+        z (int)
+        patch_size (int)
+        sample_index (int)
+        pair_index (int): (src, tgt): (0, 1)
+    """
+    z_range = slice(z, z+1) if pair_index == 0 else slice(z-1, z)
+    if cvs['field'] is not None:
+        field = cvs['field'][
+            x_offset:x_offset + patch_size,
+            y_offset:y_offset + patch_size,
+            z_range]
+        field = np.transpose(field, (2,3,0,1))
+        field = torch.tensor(field).field_()
+        trans = field.mean_finite_vector(keepdim=True)
+        trans = (trans // (2**mip)) * 2**mip
+        x_offset+=int(trans[0,0,0,0])
+        y_offset+=int(trans[0,1,0,0])
+        field -= trans
+        field = field.permute(0,2,3,1).squeeze()
+        write_tensor(dset=dsets['field'], 
+                        data=field,
+                        sample_index=sample_index,
+                        pair_index=pair_index)
+
+    for k in ['img', 'defects']:
+        if cvs[k] is not None:
+            img = cvs[k][
+                x_offset:x_offset + patch_size,
+                y_offset:y_offset + patch_size,
+                z_range].squeeze((2,3))
+            if k == 'img':
+                assert((img != 0).sum() > 0)
+            write_array(dset=dsets[k], 
+                        data=img,
+                        sample_index=sample_index,
+                        pair_index=pair_index)
+
 
 def download_dataset(meta, 
                      dst_folder, 
@@ -112,11 +192,10 @@ def download_dataset(meta,
     else:
         suffix = ''
 
-    dset_name = "x{}_y{}_z{}{}_MIP{}.h5".format(x_offset,
-            y_offset, z_start, suffix, mip)
+    dset_name = "x{}_y{}_z{}_MIP{}{}.h5".format(x_offset,
+            y_offset, z_start, mip, suffix)
+    print('download_dataset for {}'.format(dset_name))
 
-    x_offset //= 2**mip
-    y_offset //= 2**mip
     dst_path = os.path.join(dst_folder, dset_name)
     for data_kind in ['img', 'defects', 'field']:
         if data_kind in meta['src'] and \
@@ -140,47 +219,21 @@ def download_dataset(meta,
                     fill_missing=True,
                     bounded=False, progress=False, parallel=parallel)
 
+    x_offset //= 2**mip
+    y_offset //= 2**mip
     for i, z in tqdm(enumerate(section_ids)):
-        src_x_offset = x_offset
-        src_y_offset = y_offset
-        tgt_x_offset = x_offset
-        tgt_y_offset = y_offset
-
-        for data_kind in ['field', 'img', 'defects']:
-            if data_kind in src_cvs:
-                src_cv_data = src_cvs[data_kind][
-                    src_x_offset:src_x_offset + patch_size,
-                    src_y_offset:src_y_offset + patch_size,
-                    z:z+1]
-
-                if data_kind in tgt_cvs:
-                    tgt_cv_data = tgt_cvs[data_kind][
-                        tgt_x_offset:tgt_x_offset + patch_size,
-                        tgt_y_offset:tgt_y_offset + patch_size,
-                        z-1:z]
-                else:
-                    tgt_cv_data = np.zeros_like(src_cv_data)
-
-                src_data = np.array(src_cv_data).squeeze()
-                tgt_data = np.array(tgt_cv_data).squeeze()
-                if (src_data != 0).sum() == 0:
-                    print ('empty slice')
-                    import pdb; pdb.set_trace()
-
-                if data_kind == 'field':
-                    tgt_field_offset = profile_field(tgt_data)
-                    assert (tgt_data != 0).sum() == 0
-                    src_field_offset = profile_field(src_data)
-
-                dsets[data_kind][i, 0] = src_data
-                dsets[data_kind][i, 1] = tgt_data
-
-
-def profile_field(field):
-    return 0, 0
+        for pair_index, cvs in enumerate([src_cvs, tgt_cvs]):
+            download_section(dsets,
+                             cvs,
+                             x_offset,
+                             y_offset,
+                             z,
+                             patch_size,
+                             sample_index=i,
+                             pair_index=pair_index)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Do Sergiys work instead of Sergiy.')
+    parser = argparse.ArgumentParser(description='Create MetroEM datasets via CloudVolume')
     parser.add_argument('--mips', type=int, nargs='+')
     parser.add_argument('--patch_sizes', type=int, nargs='+')
     parser.add_argument('--x_offset',  type=int, default=0)
@@ -223,8 +276,11 @@ if __name__ == '__main__':
     dst_folder = args.dst_folder
     Path(dst_folder).mkdir(parents=True, exist_ok=True)
 
-    for mip, patch_size in zip(mips, patch_sizes):
+    for mip in mips:
+        assert x_offset % 2**mip == 0
+        assert y_offset % 2**mip == 0
 
+    for mip, patch_size in zip(mips, patch_sizes):
         download_dataset(
                 meta, dst_folder,
                 z_start, z_end, mip=mip,
