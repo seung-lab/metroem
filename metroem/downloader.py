@@ -19,7 +19,7 @@ def make_dset(dst_path,
               num_samples, 
               patch_size, 
               chunk_size=512,
-              dtype=None):
+              dtype=np.float32):
     """Create H5 file for dataset object
 
     Args:
@@ -33,8 +33,6 @@ def make_dset(dst_path,
 
     if chunk_size is None:
         chunk_size = patch_size
-    if dtype is None:
-        dtype = np.float32
 
     df = h5py.File(dst_path, 'a')
 
