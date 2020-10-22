@@ -185,8 +185,14 @@ if __name__ == '__main__':
     parser.add_argument('--patch_sizes', type=int, nargs='+')
     parser.add_argument('--x_offset',  type=int, default=0)
     parser.add_argument('--y_offset',  type=int, default=0)
-    parser.add_argument('--z_start', type=int, default=None)
-    parser.add_argument('--z_end', type=int, default=None)
+    parser.add_argument('--z_start', 
+                        type=int, 
+                        default=None,
+                        help='Start of source image range (target range start is z_start-1')
+    parser.add_argument('--z_end', 
+                        type=int, 
+                        default=None,
+                        help='End of source image range (target range end is z_end-1')
     parser.add_argument('--cv_path', type=str, default=None)
     parser.add_argument('--cv_path_defects', type=str, default=None)
     parser.add_argument('--cv_path_field', type=str, default=None)
