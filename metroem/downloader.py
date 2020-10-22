@@ -189,6 +189,7 @@ if __name__ == '__main__':
     parser.add_argument('--z_end', type=int, default=None)
     parser.add_argument('--cv_path', type=str, default=None)
     parser.add_argument('--cv_path_defects', type=str, default=None)
+    parser.add_argument('--cv_path_field', type=str, default=None)
     parser.add_argument('--suffix', type=str, default=None)
     parser.add_argument('--dst_folder', type=str, default='./dataset01')
     parser.add_argument('--parallel', type=int, default=1)
@@ -204,7 +205,8 @@ if __name__ == '__main__':
 
     src_spec = {
         'img': args.cv_path,
-        'defects': args.cv_path_defects
+        'defects': args.cv_path_defects,
+        'field': args.cv_path_field
     }
     tgt_spec = src_spec
     meta = {
