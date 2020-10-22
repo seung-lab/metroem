@@ -14,9 +14,22 @@ from pathlib import Path
 from tqdm import tqdm
 
 
-def make_dset(dst_path, data_kind,
-              num_samples, patch_size, chunk_size=512,
+def make_dset(dst_path, 
+              data_kind,
+              num_samples, 
+              patch_size, 
+              chunk_size=512,
               dtype=None):
+    """Create H5 file for dataset object
+
+    Args:
+        dst_path (str): H5 filepath
+        data_kind (str): {img, defects, field}
+        num_samples (int)
+        patch_size (int): W x H; W==H for each sample
+        chunk_size (int): H5 chunking (default: patch_size)
+        dtype (type): datatype of H5 
+    """
 
     if chunk_size is None:
         chunk_size = patch_size
