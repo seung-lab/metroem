@@ -29,6 +29,13 @@ def make_dset(dst_path,
         patch_size (int): W x H; W==H for each sample
         chunk_size (int): H5 chunking (default: patch_size)
         dtype (type): datatype of H5 
+
+    Returns:
+        h5py.File object, sized for data_kind
+        img & defects:
+            num_samples x 2 x patch_size x patch_size
+        field:
+            num_samples x 2 x patch_size x patch_size x 2
     """
 
     if chunk_size is None:
