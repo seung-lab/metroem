@@ -140,7 +140,6 @@ def download_dataset(meta,
                     fill_missing=True,
                     bounded=False, progress=False, parallel=parallel)
 
-
     for i, z in tqdm(enumerate(section_ids)):
         src_x_offset = x_offset
         src_y_offset = y_offset
@@ -186,7 +185,6 @@ if __name__ == '__main__':
     parser.add_argument('--patch_sizes', type=int, nargs='+')
     parser.add_argument('--x_offset',  type=int, default=0)
     parser.add_argument('--y_offset',  type=int, default=0)
-    parser.add_argument('--section_ids_filename', type=str, default=None)
     parser.add_argument('--z_start', type=int, default=None)
     parser.add_argument('--z_end', type=int, default=None)
     parser.add_argument('--cv_path', type=str, default=None)
@@ -197,7 +195,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    section_ids_filename = args.section_ids_filename
     mips = args.mips
     patch_sizes = args.patch_sizes
     z_start = args.z_start
