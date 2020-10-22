@@ -46,7 +46,7 @@ def make_dset(dst_path,
         raise Exception("Unkonw data kind {}".format(data_kind))
 
     dset_shape = (num_samples, 2, *data_shape)
-    chunk_dim = (1, 1, *data_shape)
+    chunk_dim = (1, 1, *chunk_shape)
 
     if data_kind in df:
         del df[data_kind]
