@@ -20,7 +20,7 @@ def make_dset(dst_path,
               patch_size, 
               chunk_size=512,
               dtype=np.float32):
-    """Create H5 file for dataset object
+    """Define H5 file for data_kind
 
     Args:
         dst_path (str): H5 filepath
@@ -56,10 +56,40 @@ def make_dset(dst_path,
 
     return dset
 
-def download_dataset(meta, dst_folder, z_start, z_end,
-                     mip, x_offset=0, y_offset=0, patch_size=None,
+def download_dataset(meta, 
+                     dst_folder, 
+                     z_start, 
+                     z_end,
+                     mip, 
+                     x_offset=0, 
+                     y_offset=0, 
+                     patch_size=None,
                      suffix=None,
                      parallel=1):
+    """Create H5 for each data_kind in meta downloading from CloudVolume
+
+    Args:
+        meta (dict): specify CloudVolume paths with following hierarchy:
+            'src': {
+                'img'
+                'defects'
+                'field'
+            },
+            'tgt': {
+                'img'
+                'defects'
+                'field'
+            }
+        dst_folder (str): root of directory where H5 files will be stored
+        z_start (int)
+        z_end (int)
+        mip (int)
+        x_offset (int): offset in MIP0 pixels; must be multiple of MIP factor
+        y_offset (int): offset in MIP0 pixels; must be multiple of MIP factor
+        patch_size (int): width & height of 2D region to download
+        suffix (str): append to each H5 filename
+        parallel (int): no. of threads for CloudVolume operations
+    """
     assert x_offset % 2**mip == 0
     assert y_offset % 2**mip == 0
 
