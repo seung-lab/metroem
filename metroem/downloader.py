@@ -47,7 +47,8 @@ def make_dset(dst_path, data_kind,
 
 def download_dataset(meta, dst_folder, z_start, z_end,
                      mip, x_offset=0, y_offset=0, patch_size=None,
-                     suffix=None):
+                     suffix=None,
+                     parallel=1):
     assert x_offset % 2**mip == 0
     assert y_offset % 2**mip == 0
 
@@ -81,7 +82,7 @@ def download_dataset(meta, dst_folder, z_start, z_end,
                 meta['src'][data_kind],
                 mip=mip,
                 fill_missing=True,
-                bounded=False, progress=False, parallel=16)
+                bounded=False, progress=False, parallel=parallel)
 
         if data_kind in meta['tgt'] and \
                 meta['tgt'][data_kind] is not None:
@@ -89,7 +90,7 @@ def download_dataset(meta, dst_folder, z_start, z_end,
                     meta['tgt'][data_kind],
                     mip=mip,
                     fill_missing=True,
-                    bounded=False, progress=False, parallel=16)
+                    bounded=False, progress=False, parallel=parallel)
 
 
     for i, z in tqdm(enumerate(section_ids)):
@@ -144,6 +145,7 @@ if __name__ == '__main__':
     parser.add_argument('--cv_path_defects', type=str, default=None)
     parser.add_argument('--suffix', type=str, default=None)
     parser.add_argument('--dst_folder', type=str, default='./dataset01')
+    parser.add_argument('--parallel', type=int, default=1)
 
     args = parser.parse_args()
 
@@ -176,4 +178,6 @@ if __name__ == '__main__':
                 x_offset=x_offset,
                 y_offset=y_offset,
                 patch_size=patch_size,
-                suffix=None)
+                suffix=None,
+                parallel=args.parallel)
+
