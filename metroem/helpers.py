@@ -8,7 +8,9 @@ from skimage.transform import rescale
 from functools import reduce
 import subprocess
 from torch.nn.parameter import Parameter
+from cloudvolume import CloudVolume
 
+import h5py
 import artificery
 import json
 
@@ -290,5 +292,113 @@ def normalize(img, per_feature_center=True, per_feature_var=False, eps=1e-8,
 
     return img_out
 
+def write_array(dset, data, sample_index, pair_index):
+    """Write ndarray to H5 file
+    """
+    dset[sample_index, pair_index] = data
 
+def write_tensor(dset, data, sample_index, pair_index):
+    """Write tensor to H5 file
 
+    Args:
+        dset (h5py.File)
+        data (torch.Tensor): no leading identity dimensions
+        sample_index (int)
+        pair_index (int)
+    """
+    if data.is_cuda:
+        data = data.cpu()
+    data = data.numpy()
+    write_array(dset, data, sample_index, pair_index)
+
+def make_dset(dset_path, 
+              data_name,
+              num_samples, 
+              patch_size, 
+              chunk_size=512,
+              dtype=np.float32):
+    """Define H5 file for data_name
+
+    Args:
+        dset_path (str): H5 filepath
+        data_name (str): {img, defects, field}
+        num_samples (int)
+        patch_size (int): W x H; W==H for each sample
+        chunk_size (int): H5 chunking (default: patch_size)
+        dtype (type): datatype of H5 
+
+    Returns:
+        h5py.File object, sized for data_name
+        img & defects:
+            num_samples x 2 x patch_size x patch_size
+        field:
+            num_samples x 2 x patch_size x patch_size x 2
+    """
+    print('make_dset for {}'.format(data_name))
+    if chunk_size is None:
+        chunk_size = patch_size
+
+    if data_name in ['img', 'defects']:
+        data_shape = [patch_size, patch_size]
+        chunk_shape = [chunk_size, chunk_size]
+        scaleoffset=None
+    elif data_name == 'field':
+        data_shape = [patch_size, patch_size, 2]
+        chunk_shape = [chunk_size, chunk_size, 2]
+        scaleoffset=2
+    else:
+        raise Exception("Unkonw data kind {}".format(data_name))
+
+    df = h5py.File(dset_path, 'a')
+
+    dset_shape = (num_samples, 2, *data_shape)
+    chunk_dim = (1, 1, *chunk_shape)
+
+    if data_name in df:
+        del df[data_name]
+
+    dset = df.create_dataset(data_name, 
+                             dset_shape, 
+                             dtype=dtype,
+                             chunks=chunk_dim, 
+                             compression='lzf',
+                             scaleoffset=scaleoffset)
+
+    return dset
+
+def get_dset_path(dst_folder,
+                  x_offset,
+                  y_offset,
+                  z_start,
+                  mip,
+                  suffix):
+    """Get H5 filepath
+    """
+    suffix = '_' + suffix if suffix is not None else ''
+    dset_name = "x{}_y{}_z{}_MIP{}{}.h5".format(x_offset,
+            y_offset, z_start, mip, suffix)
+    return dst_folder / dset_name
+
+def get_cv_and_dset(data_name,
+                    cv_path,
+                    dset_path, 
+                    num_samples, 
+                    mip,
+                    patch_size=None,
+                    suffix=None,
+                    parallel=1):
+    """Create CloudVolume & H5 file
+    """
+    vol = CloudVolume(cv_path,
+                      mip=mip,
+                      fill_missing=True,
+                      bounded=False, 
+                      progress=False, 
+                      parallel=parallel)
+    dset = make_dset(dset_path=dset_path,
+                     data_name=data_name,
+                     num_samples=num_samples,
+                     patch_size=patch_size,
+                     chunk_size=patch_size,
+                     dtype=np.float32)
+    return vol, dset
