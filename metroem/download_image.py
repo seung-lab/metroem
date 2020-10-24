@@ -10,7 +10,7 @@ import argparse
 import torch
 import torchfields
 
-import cloudvolume as cv
+from cloudvolume import CloudVolume
 import numpy as np
 
 from pathlib import Path
@@ -27,8 +27,10 @@ def download_section_image(vol,
                         z,
                         patch_size,
                         sample_index,
-                        pair_index):
-    """Download image & defects data to H5 files
+                        pair_index,
+                        defect_mask,
+                        mask_val):
+    """Download image data with defects masked to H5 files
 
     Args:
         vol (CloudVolume)
@@ -39,11 +41,17 @@ def download_section_image(vol,
         patch_size (int)
         sample_index (int)
         pair_index (int): (src, tgt): (0, 1)
+        defect_mask (CloudVolume)
+        mask_val (number): value of mask to exclude from image
     """
     z_range = slice(z, z+1) if pair_index == 0 else slice(z-1, z)
     img = vol[x_offset:x_offset + patch_size,
               y_offset:y_offset + patch_size,
               z_range].squeeze((2,3))
+    mask = defect_mask[x_offset:x_offset + patch_size,
+              y_offset:y_offset + patch_size,
+              z_range].squeeze((2,3))
+    img[mask >= mask_val] = 0
     write_array(dset=dset,
                 data=img,
                 sample_index=sample_index,
@@ -59,7 +67,9 @@ def download_dataset_image(cv_path,
                         patch_size=None,
                         suffix=None,
                         parallel=1,
-                        offsets=None):
+                        offsets=None,
+                        cv_path_defects=None,
+                        mask_val=1):
     """Create CloudVolume & H5 file and transfer image
 
     Args:
@@ -75,6 +85,8 @@ def download_dataset_image(cv_path,
         suffix (str): append to each H5 filename
         parallel (int): no. of threads for CloudVolume operations
         offsets (h5py.Dataset): N x 2 x 2 dataset
+        cv_path_defects (str): CloudVolume path to defect mask
+        mask_val
     """
     section_ids = range(z_start, z_end)
     num_samples = len(section_ids)
@@ -91,7 +103,15 @@ def download_dataset_image(cv_path,
                                 mip=mip, 
                                 patch_size=patch_size,
                                 suffix=suffix,
-                                parallel=1)
+                                parallel=parallel)
+    defect_mask = None
+    if cv_path_defects is not None:
+        defect_mask = CloudVolume(cv_path_defects,
+                        mip=mip,
+                        fill_missing=True,
+                        bounded=False, 
+                        progress=False, 
+                        parallel=parallel)
     for sample_index, z in tqdm(enumerate(section_ids)):
         for pair_index in range(2):
             x_trans, y_trans = 0, 0
@@ -106,7 +126,9 @@ def download_dataset_image(cv_path,
                                 z=z,
                                 patch_size=patch_size,
                                 sample_index=sample_index,
-                                pair_index=pair_index)
+                                pair_index=pair_index,
+                                defect_mask=defect_mask,
+                                mask_val=mask_val)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -126,6 +148,8 @@ if __name__ == '__main__':
             default=None,
             help='End of source image range (target range end is z_end-1')
     parser.add_argument('--cv_path', type=str, default=None)
+    parser.add_argument('--cv_path_defects', type=str, default=None)
+    parser.add_argument('--mask_val', type=float, default=1)
     parser.add_argument('--field_dset', 
                         type=str, 
                         default=None,
@@ -154,4 +178,6 @@ if __name__ == '__main__':
                                 patch_size=patch_size,
                                 suffix=args.suffix,
                                 parallel=args.parallel,
-                                offsets=offsets)
+                                offsets=offsets,
+                                cv_path_defects=args.cv_path_defects,
+                                mask_val=args.mask_val)
