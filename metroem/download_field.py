@@ -133,7 +133,7 @@ def download_dataset_field(cv_path,
                                 mip=mip, 
                                 patch_size=patch_size,
                                 suffix=suffix,
-                                parallel=1)
+                                parallel=parallel)
     offsets = make_offset_dset(dset_path=dset_path, 
                                num_samples=num_samples, 
                                dtype=int)
