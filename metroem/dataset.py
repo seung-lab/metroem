@@ -34,6 +34,16 @@ class SimpleH5Dataset(torch.utils.data.Dataset):
 
 
 class MultimipDataset:
+    """Access image & field samples by MIP for dataset directory
+
+    Filename conventions within dataset directory:
+      Image: '<NAME>_MIP>MIP.H5'
+      Field: 'field_<STAGE>_<NAME>_<MIP>MIP_<CHECKPOINT NAME>.H5'
+        <NAME>: x<X_START>_y<Y_START>_z<Z_START>
+
+    Fields are associated with a checkpoint name, because different experiments
+    may produce different fields as intermediaries between modules.
+    """
     def __init__(self, path, aug_params=None, field_tag=None):
         self.path = path
         self.aug_params = aug_params
@@ -214,6 +224,7 @@ class MultimipDataset:
     def _upsample_field(self, name, stage, mip_start, mip_end):
         for src_mip in range(mip_start, mip_end - 1, -1):
             tgt_mip = src_mip - 1
+            import pdb; pdb.set_trace()
 
             src_field_dset = self.get_field_dset(name=name, stage=stage, mip=src_mip)
             tgt_img_dset = self.get_img_dset(name=name, mip=tgt_mip)
@@ -237,10 +248,17 @@ class MultimipDataset:
 
     def get_alignment_dset(self, mip, stage=None, start_index=0, end_index=None,
             crop_mode=None, cropped_size=None):
+        """Create AlignmentDataLoader providing image pairs with associated fields
+
+        Details about associated fields:
+            * If STAGE > 0, then there must be a field available
+            * The field available must be at the required MIP of STAGE
+            * The field for the current STAGE is indexed at the current MIP,
+                but by the previous STAGE (STAGE - 1)
+        """
 
         if self.img_composite_dsets[mip] is None:
             self.load_img_composite_dset(mip)
-
         if stage not in [None, 0] and self.field_composite_dsets[mip][stage - 1] is None:
             self.load_field_composite_dset(mip, stage - 1)
 
@@ -254,18 +272,25 @@ class MultimipDataset:
                 )
 
     def get_train_dset(self, mip, stage=None, crop_mode='random', cropped_size=1024):
+        """Get training dataset: all but last two image pairs
+        """
         self.load_img_composite_dset(mip)
-        return self.get_alignment_dset(mip, stage=stage,
-                start_index=0,
-                                     #start_index=len(self.img_composite_dsets[mip]) - 3,
-                                     end_index=len(self.img_composite_dsets[mip])-2,
-                                     crop_mode=crop_mode, cropped_size=cropped_size)
+        return self.get_alignment_dset(mip=mip, 
+                               stage=stage,
+                               start_index=0,
+                               end_index=len(self.img_composite_dsets[mip])-2,
+                               crop_mode=crop_mode, 
+                               cropped_size=cropped_size)
 
     def get_val_dset(self, mip, stage=None, crop_mode='middle', cropped_size=2048):
+        """Get validation dataset: last two images pairs
+        """
         self.load_img_composite_dset(mip)
-        return self.get_alignment_dset(mip, stage=stage,
-                                     start_index=len(self.img_composite_dsets[mip]) - 2,
-                                     crop_mode=crop_mode, cropped_size=cropped_size)
+        return self.get_alignment_dset(mip=mip, 
+                               stage=stage,
+                               start_index=len(self.img_composite_dsets[mip])-2,
+                               crop_mode=crop_mode, 
+                               cropped_size=cropped_size)
 
 
 class AlignmentDataLoader(torch.utils.data.Dataset):
