@@ -161,7 +161,7 @@ class MultimipDataset:
         else:
             if "main" in field_file:
                 field_dset = field_file["main"]
-            elif "main" in field_file:
+            elif "field" in field_file:
                 field_dset = field_file["field"]
 
         self.field_dsets[mip][name][stage] = field_dset
