@@ -48,10 +48,11 @@ def download_section_image(vol,
     img = vol[x_offset:x_offset + patch_size,
               y_offset:y_offset + patch_size,
               z_range].squeeze((2,3))
-    mask = defect_mask[x_offset:x_offset + patch_size,
-              y_offset:y_offset + patch_size,
-              z_range].squeeze((2,3))
-    img[mask >= mask_val] = 0
+    if defect_mask is not None:
+        mask = defect_mask[x_offset:x_offset + patch_size,
+                  y_offset:y_offset + patch_size,
+                  z_range].squeeze((2,3))
+        img[mask >= mask_val] = 0
     write_array(dset=dset,
                 data=img,
                 sample_index=sample_index,
