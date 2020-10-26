@@ -38,7 +38,7 @@ def make_offset_dset(dset_path,
     data_name = 'offset'
     if data_name in df:
         del df[data_name]
-    dset_shape = (num_samples, 2, 2)
+    dset_shape = (num_samples, 2)
     chunk_dim = (1, 1, 2)
     return df.create_dataset(data_name,
                              dset_shape, 
@@ -61,8 +61,8 @@ def download_section_field(vol,
     The field will not be used to warp the img and defects. Warping is handled 
     in the dataloader.
 
-    Field is assumed to be in MIP0 displacements. Translations are stored in
-    MIP0 displacements.
+    Field is assumed to be in MIP0 displacements, and converted to
+    MIP displacements. Translations are stored in MIP0 displacements.
 
     Args:
         vol (CloudVolume)
@@ -86,7 +86,7 @@ def download_section_field(vol,
     trans = (trans // (2**mip)) * 2**mip
     offsets[sample_index, pair_index, :] = [int(trans[0,0,0,0]), int(trans[0,1,0,0])]
     field -= trans
-    field = field.permute(0,2,3,1).squeeze()
+    field = field.squeeze() / (2**mip)
     write_tensor(dset=dset,
                  data=field,
                  sample_index=sample_index,
