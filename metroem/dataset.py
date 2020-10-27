@@ -4,6 +4,7 @@ import h5py
 import os
 import re
 import torch
+import torchfields
 import numpy as np
 
 from collections import defaultdict
@@ -314,8 +315,14 @@ class MultimipDataset:
 
 
 class AlignmentDataLoader(torch.utils.data.Dataset):
-    def __init__(self, img_dset, field_dset, start_index, end_index,
-            crop_mode=None, cropped_size=None):
+    def __init__(self, 
+                img_dset, 
+                field_dset, 
+                start_index, 
+                end_index,
+                crop_mode=None, 
+                cropped_size=None,
+                permute_pairs=True):
         self.img_dset = img_dset
         self.field_dset = field_dset
 
@@ -328,12 +335,17 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         self.shape = self.img_dset[0].shape
         self.crop_mode = crop_mode
         self.cropped_size = cropped_size
+        self.permute_pairs = permute_pairs
 
     def __len__(self):
-        return self.end_index - self.start_index
+        n = self.end_index - self.start_index
+        if self.permute_pairs:
+            n *= 2
+        return n
 
     def set_size_limit(self, n):
         if n < len(self):
+            n = n // 2 if self.permute_pairs else n
             self.end_index = self.start_index + n
 
     def _get_crop_coords(self):
@@ -351,20 +363,32 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         return x_bot, x_top, y_bot, y_top
 
     def __getitem__(self, i):
+        src_index = 0
+        tgt_index = 1
+        if self.permute_pairs:
+            i = i // 2
+            swap_src_tgt = i % 2
+            if swap_src_tgt:
+                src_index, tgt_index = tgt_index, src_index
         x_bot, x_top, y_bot, y_top = self._get_crop_coords()
+        x_slice = slice(x_bot, x_top)
+        y_slice = slice(y_bot, y_top)
 
         img = self.img_dset[self.start_index + i]
-        src = helpers.to_tensor(img[..., 0, x_bot:x_top, y_bot:y_top])
-        tgt = helpers.to_tensor(img[..., 1, x_bot:x_top, y_bot:y_top])
+        src = helpers.to_tensor(img[src_index, x_slice, y_slice])
+        tgt = helpers.to_tensor(img[tgt_index, x_slice, y_slice])
         src[src < -4] = 0
         tgt[tgt < -4] = 0
 
-        field = None
+        src_field = None
+        tgt_field = None
         if self.field_dset is not None:
-            full_field = self.field_dset[self.start_index + i]
-            field = helpers.to_tensor(
-                    full_field[..., x_bot:x_top, y_bot:y_top]
-                )
+            fields = self.field_dset[self.start_index + i]
+            src_field = helpers.to_tensor(fields[src_index, 2, x_slice, y_slice])
+            tgt_field = helpers.to_tensor(fields[tgt_index, 2, x_slice, y_slice])
+        if tgt_field is not None:
+            tgt_field = tgt_field.field()
+            tgt = tgt_field.from_pixels()(tgt)
 
         bundle = {
             "src": src,
@@ -372,8 +396,8 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
             "src_zeros": src == 0,
             "tgt_zeros": tgt == 0,
                 }
-        if field is not None:
-            bundle["src_field"] = field
+        if src_field is not None:
+            bundle["src_field"] = src_field
         return bundle
 
 def get_random_crop_coords(full_shape, cropped_size):
