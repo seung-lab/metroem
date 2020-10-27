@@ -15,10 +15,61 @@ import numpy as np
 
 from pathlib import Path
 from tqdm import tqdm
-from helpers import write_array, \
-                    make_dset, \
-                    get_dset_path, \
-                    get_cv_and_dset
+
+def get_dset_path(dst_folder,
+                  x_offset,
+                  y_offset,
+                  z_start,
+                  mip,
+                  suffix):
+    """Get H5 filepath
+    """
+    suffix = '_' + suffix if suffix is not None else ''
+    dset_name = "x{}_y{}_z{}_MIP{}{}.h5".format(x_offset,
+            y_offset, z_start, mip, suffix)
+    return dst_folder / dset_name
+
+def write_array(dset, data, sample_index, pair_index):
+    """Write ndarray to H5 file
+    """
+    dset[sample_index, pair_index] = data
+
+def make_image_dset(dset_path, 
+                  num_samples, 
+                  patch_size, 
+                  chunk_size=512,
+                  dtype=np.float32):
+    """Define H5 file for image data
+
+    Args:
+        dset_path (str): H5 filepath
+        num_samples (int)
+        patch_size (int): W x H; W==H for each sample
+        chunk_size (int): H5 chunking (default: patch_size)
+        dtype (type): datatype of H5 
+
+    Returns:
+        h5py.File object, sized:
+            num_samples x 2 x patch_size x patch_size
+    """
+    print('make_field_dset')
+    if chunk_size is None:
+        chunk_size = patch_size
+    data_name ='img'
+    data_shape = [patch_size, patch_size]
+    chunk_shape = [chunk_size, chunk_size]
+    df = h5py.File(dset_path, 'a')
+    dset_shape = (num_samples, 2, *data_shape)
+    chunk_dim = (1, 1, *chunk_shape)
+    if data_name in df:
+        del df[data_name]
+    dset = df.create_dataset(data_name,
+                             dset_shape, 
+                             dtype=dtype,
+                             chunks=chunk_dim, 
+                             compression='lzf',
+                             scaleoffset=None)
+    return dset
 
 def download_section_image(vol,
                         dset,
@@ -37,14 +88,13 @@ def download_section_image(vol,
         dset (h5py.File)
         x_offset (int)
         y_offset (int)
-        z (int)
+        z_range (slice): length one
         patch_size (int)
         sample_index (int)
         pair_index (int): (src, tgt): (0, 1)
         defect_mask (CloudVolume)
         mask_val (number): value of mask to exclude from image
     """
-    z_range = slice(z, z+1) if pair_index == 0 else slice(z-1, z)
     img = vol[x_offset:x_offset + patch_size,
               y_offset:y_offset + patch_size,
               z_range].squeeze((2,3))
@@ -97,14 +147,15 @@ def download_dataset_image(cv_path,
                               z_start=z_start,
                               mip=mip,
                               suffix=suffix)
-    vol, dset = get_cv_and_dset(data_name='img',
-                                cv_path=cv_path,
-                                dset_path=dset_path,
-                                num_samples=num_samples,
-                                mip=mip, 
-                                patch_size=patch_size,
-                                suffix=suffix,
-                                parallel=parallel)
+    dset = make_image_dset(dset_path=dset_path,
+                          num_samples=num_samples,
+                          patch_size=patch_size)
+    vol = CloudVolume(cv_path,
+                      mip=mip,
+                      fill_missing=True,
+                      bounded=False, 
+                      progress=False, 
+                      parallel=parallel)
     defect_mask = None
     if cv_path_defects is not None:
         defect_mask = CloudVolume(cv_path_defects,
@@ -116,15 +167,16 @@ def download_dataset_image(cv_path,
     for sample_index, z in tqdm(enumerate(section_ids)):
         for pair_index in range(2):
             x_trans, y_trans = 0, 0
-            if offsets is not None:
-                x_trans, y_trans = offsets[sample_index, pair_index,:]
+            if (offsets is not None):
+                x_trans, y_trans = offsets[sample_index, :]
             section_x_offset = (x_offset + x_trans) // 2**mip
             section_y_offset = (y_offset + y_trans) // 2**mip
+            z_range = slice(z, z+1) if pair_index == 0 else slice(z-1, z)
             download_section_image(vol=vol,
                                 dset=dset,
                                 x_offset=section_x_offset,
                                 y_offset=section_y_offset,
-                                z=z,
+                                z_range=z_range,
                                 patch_size=patch_size,
                                 sample_index=sample_index,
                                 pair_index=pair_index,

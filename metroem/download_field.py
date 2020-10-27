@@ -10,15 +10,78 @@ import argparse
 import torch
 import torchfields
 
-import cloudvolume as cv
 import numpy as np
 
 from pathlib import Path
 from tqdm import tqdm
-from helpers import write_tensor, \
-                    make_dset, \
-                    get_dset_path, \
-                    get_cv_and_dset
+from cloudvolume import CloudVolume
+
+def get_dset_path(dst_folder,
+                  x_offset,
+                  y_offset,
+                  z_start,
+                  mip,
+                  suffix):
+    """Get H5 filepath
+    """
+    suffix = '_' + suffix if suffix is not None else ''
+    dset_name = "field_0_x{}_y{}_z{}_MIP{}{}.h5".format(x_offset,
+                                                        y_offset, 
+                                                        z_start, 
+                                                        mip, 
+                                                        suffix)
+    return dst_folder / dset_name
+
+def write_tensor(dset, data, sample_index):
+    """Write tensor to H5 file
+
+    Args:
+        dset (h5py.File)
+        data (torch.Tensor): no leading identity dimensions
+        indices (Tuple)
+    """
+    if data.is_cuda:
+        data = data.cpu()
+    data = data.numpy()
+    dset[sample_index] = data
+
+def make_field_dset(dset_path, 
+                  num_samples, 
+                  patch_size, 
+                  chunk_size=512,
+                  dtype=np.float32):
+    """Define H5 file for data_name
+
+    Args:
+        dset_path (str): H5 filepath
+        num_samples (int)
+        patch_size (int): W x H; W==H for each sample
+        chunk_size (int): H5 chunking (default: patch_size)
+        dtype (type): datatype of H5 
+
+    Returns:
+        h5py.File object, sized:
+            num_samples x 2 x patch_size x patch_size
+    """
+    print('make_field_dset')
+    if chunk_size is None:
+        chunk_size = patch_size
+    data_name = 'field'
+    data_shape = [2, patch_size, patch_size]
+    chunk_shape = [2, 2, chunk_size, chunk_size]
+    scaleoffset = 2
+    df = h5py.File(dset_path, 'a')
+    dset_shape = (num_samples, *data_shape)
+    chunk_dim = (1, 1, *chunk_shape)
+    if data_name in df:
+        del df[data_name]
+    dset = df.create_dataset(data_name,
+                             dset_shape, 
+                             dtype=dtype,
+                             chunks=chunk_dim, 
+                             compression='lzf',
+                             scaleoffset=scaleoffset)
+    return dset
 
 def make_offset_dset(dset_path, 
                     num_samples, 
@@ -38,7 +101,7 @@ def make_offset_dset(dset_path,
     data_name = 'offset'
     if data_name in df:
         del df[data_name]
-    dset_shape = (num_samples, 2)
+    dset_shape = (num_samples, 2, 2)
     chunk_dim = (1, 1, 2)
     return df.create_dataset(data_name,
                              dset_shape, 
@@ -51,11 +114,10 @@ def download_section_field(vol,
                         offsets,
                         x_offset,
                         y_offset,
-                        z,
+                        z_range,
                         mip,
                         patch_size,
-                        sample_index,
-                        pair_index):
+                        sample_index):
     """Download field to H5 file and collect offset adjustments
 
     The field will not be used to warp the img and defects. Warping is handled 
@@ -70,13 +132,12 @@ def download_section_field(vol,
         offsets (h5py.Dataset): z x src/tgt x x/y translation
         x_offset (int)
         y_offset (int)
-        z (int)
+        z_range (slice): length one
         mip (int)
         patch_size (int)
         sample_index (int)
         pair_index (int): (src, tgt): (0, 1)
     """
-    z_range = slice(z, z+1) if pair_index == 0 else slice(z-1, z)
     field = vol[x_offset:x_offset + patch_size,
                 y_offset:y_offset + patch_size,
                 z_range]
@@ -84,14 +145,16 @@ def download_section_field(vol,
     field = torch.tensor(field).field_()
     trans = field.mean_finite_vector(keepdim=True)
     trans = (trans // (2**mip)) * 2**mip
-    offsets[sample_index, pair_index, :] = [int(trans[0,0,0,0]), int(trans[0,1,0,0])]
+    offset = [int(trans[0,0,0,0]), int(trans[0,1,0,0])]
+    offsets[sample_index, pair_index, :] = offset
     field -= trans
-    field = field.squeeze() / (2**mip)
+    field = field.squeeze()
+    field = torch.flip(field, [0]) # reverse x,y components
+    field = field / (2**mip)
     write_tensor(dset=dset,
                  data=field,
                  sample_index=sample_index,
                  pair_index=pair_index)
-
 
 def download_dataset_field(cv_path,
                         dst_folder, 
@@ -126,14 +189,15 @@ def download_dataset_field(cv_path,
                               z_start=z_start,
                               mip=mip,
                               suffix=suffix)
-    vol, dset = get_cv_and_dset(data_name='field',
-                                cv_path=cv_path,
-                                dset_path=dset_path,
-                                num_samples=num_samples,
-                                mip=mip, 
-                                patch_size=patch_size,
-                                suffix=suffix,
-                                parallel=parallel)
+    dset = make_field_dset(dset_path=dset_path,
+                          num_samples=num_samples,
+                          patch_size=patch_size)
+    vol = CloudVolume(cv_path,
+                      mip=mip,
+                      fill_missing=True,
+                      bounded=False, 
+                      progress=False, 
+                      parallel=parallel)
     offsets = make_offset_dset(dset_path=dset_path, 
                                num_samples=num_samples, 
                                dtype=int)
@@ -141,12 +205,13 @@ def download_dataset_field(cv_path,
     y_offset //= 2**mip
     for sample_index, z in tqdm(enumerate(section_ids)):
         for pair_index in range(2):
+            z_range = slice(z, z+1) if pair_index == 0 else slice(z-1, z)
             download_section_field(vol=vol,
                                 dset=dset,
                                 offsets=offsets,
                                 x_offset=x_offset,
                                 y_offset=y_offset,
-                                z=z,
+                                z_range=z_range,
                                 mip=mip,
                                 patch_size=patch_size,
                                 sample_index=sample_index,
