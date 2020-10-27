@@ -224,7 +224,6 @@ class MultimipDataset:
     def _upsample_field(self, name, stage, mip_start, mip_end):
         for src_mip in range(mip_start, mip_end - 1, -1):
             tgt_mip = src_mip - 1
-            import pdb; pdb.set_trace()
 
             src_field_dset = self.get_field_dset(name=name, stage=stage, mip=src_mip)
             tgt_img_dset = self.get_img_dset(name=name, mip=tgt_mip)
