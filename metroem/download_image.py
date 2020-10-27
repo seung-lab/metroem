@@ -75,7 +75,7 @@ def download_section_image(vol,
                         dset,
                         x_offset,
                         y_offset,
-                        z,
+                        z_range,
                         patch_size,
                         sample_index,
                         pair_index,
@@ -168,7 +168,7 @@ def download_dataset_image(cv_path,
         for pair_index in range(2):
             x_trans, y_trans = 0, 0
             if (offsets is not None):
-                x_trans, y_trans = offsets[sample_index, :]
+                x_trans, y_trans = offsets[sample_index, pair_index, :]
             section_x_offset = (x_offset + x_trans) // 2**mip
             section_y_offset = (y_offset + y_trans) // 2**mip
             z_range = slice(z, z+1) if pair_index == 0 else slice(z-1, z)
