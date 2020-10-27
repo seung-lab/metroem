@@ -136,12 +136,25 @@ class MultimipDataset:
         return self.field_dsets[mip][name][stage]
 
     def load_field_dset(self, name, mip, stage, shape=None, create=False):
+        """Return field datset for name, mip, stage; if not present, create it
+
+        Args:
+            name (str)
+            mip (int)
+            stage (int)
+            shape (Tuple(int)): shape of associated image dataset, Nx2xWxH
+            create (bool)
+        """
         field_file = self.get_field_file(name=name, mip=mip, stage=stage, create=create)
         if field_file is None and not create:
             for prev_mip in range(mip+1, self.max_mip + 1):
                 prev_field_file = self.get_field_file(name=name, mip=prev_mip, stage=stage)
                 if prev_field_file is not None:
-                    self._upsample_field(name=name, stage=stage, mip_start=prev_mip, mip_end=mip)
+                    # self._upsample_field(name=name, stage=stage, mip_start=prev_mip, mip_end=mip)
+                    self._upsample_field_direct(name=name, 
+                                                stage=stage, 
+                                                in_mip=prev_mip, 
+                                                out_mip=mip)
                     field_file = self.get_field_file(name=name, mip=mip, stage=stage, create=create)
                     break
 
@@ -155,9 +168,12 @@ class MultimipDataset:
             if "field" in field_file:
                 del field_file["field"]
 
-            field_dset = field_file.create_dataset("main", shape=shape,
+            field_shape = (shape[0], 2, 2, shape[-2], shape[-1])
+            chunks = (1, 1, 1, shape[-2], shape[-1])
+            field_dset = field_file.create_dataset("main", 
+                    shape=field_shape,
                     dtype=np.float32,
-                    chunks=(1, 2, 512, 512)
+                    chunks=chunks
                     )
         else:
             if "main" in field_file:
@@ -209,18 +225,24 @@ class MultimipDataset:
             self._generate_field_dataset(model, img_dset, field_dset, prev_field_dset)
 
     def _generate_field_dataset(self, model, img_dset, field_dset, prev_field_dset):
+        """Generate predicted source field for src, tgt pairs
+        Pairs are permutable, so predict field for src,tgt as well as tgt,src
+        """
         for b in range(img_dset.shape[0]):
-            src = helpers.to_tensor(img_dset[b, 0])
-            tgt = helpers.to_tensor(img_dset[b, 1])
+            src_index, tgt_index = 0, 1
+            for i in range(2):
+                if i == 1:
+                    src_index, tgt_index = tgt_index, src_index
+                src = helpers.to_tensor(img_dset[b, src_index])
+                tgt = helpers.to_tensor(img_dset[b, tgt_index])
+                if prev_field_dset is not None:
+                    prev_field = helpers.to_tensor(prev_field_dset[b, src_index])
+                else:
+                    prev_field = None
 
-            if prev_field_dset is not None:
-                prev_field = helpers.to_tensor(prev_field_dset[b])
-            else:
-                prev_field = None
-
-            field = model(src_img=src, tgt_img=tgt, src_agg_field=prev_field, train=False,
-                    return_state=False)
-            field_dset[b] = helpers.get_np(field)
+                field = model(src_img=src, tgt_img=tgt, src_agg_field=prev_field, train=False,
+                        return_state=False)
+                field_dset[b,src_index] = helpers.get_np(field)
 
     def _upsample_field(self, name, stage, mip_start, mip_end):
         for src_mip in range(mip_start, mip_end - 1, -1):
@@ -245,26 +267,38 @@ class MultimipDataset:
                     field_data_ups_cropped = field_data_ups[:, :, :tgt_size, :tgt_size]
                     tgt_field_dset[b] = helpers.get_np(field_data_ups_cropped[...])
 
-    def _upsample_field_direct(self, name, stage, src_mip, tgt_mip):
-        src_field_dset = self.get_field_dset(name=name, stage=stage, mip=src_mip)
-        tgt_img_dset = self.get_img_dset(name=name, mip=tgt_mip)
-        tgt_field_dset = self.load_field_dset(name=name, stage=stage, mip=tgt_mip,
-                                              shape=tgt_img_dset.shape, create=True)
-        scale_factor = 2**(src_mip-tgt_mip)
+    def _upsample_field_direct(self, name, stage, mip_in, mip_out):
+        """Upsample a field datset from SRC_MIP to DST_MIP
+
+        Args:
+            name (str): filename of dataset (input & output)
+            stage (int): module which created dataset (input & output)
+            mip_in (int): MIP level of the input dataset
+            mip_out (int): MIP level of the output dataset
+        """
+        assert(mip_in > mip_out)
+        in_field_dset = self.get_field_dset(name=name, stage=stage, mip=mip_in)
+        dst_img_dset = self.get_img_dset(name=name, mip=mip_out)
+        out_field_dset = self.load_field_dset(name=name, 
+                                              stage=stage, 
+                                              mip=mip_out,
+                                              shape=dst_img_dset.shape,
+                                              create=True)
+        scale_factor = 2**(mip_in - mip_out)
 
         with torch.no_grad():
-            tgt_size = tgt_img_dset.shape[-1]
-
-            for b in range(src_field_dset.shape[0]):
-                field_data = helpers.to_tensor(src_field_dset[b:b+1])
-                field_data_ups = torch.nn.functional.interpolate(field_data,
+            dst_size = dst_img_dset.shape[-1]
+            for n in range(in_field_dset.shape[0]):
+                for i in range(in_field_dset.shape[1]):
+                    in_field = helpers.to_tensor(in_field_dset[b:b+1,i])
+                    out_field = torch.nn.functional.interpolate(in_field,
                                                      mode='bilinear',
                                                      scale_factor=scale_factor,
                                                      align_corners=False,
                                                      recompute_scale_factor=False
                                                      ) * scale_factor
-                field_data_ups_cropped = field_data_ups[:, :, :tgt_size, :tgt_size]
-                tgt_field_dset[b] = helpers.get_np(field_data_ups_cropped[...])
+                    out_field_cropped = out_field[:, :, :dst_size, :dst_size]
+                    out_field_dset[n,i] = helpers.get_np(out_field_cropped[...])
 
 
     def get_alignment_dset(self, mip, stage=None, start_index=0, end_index=None,
