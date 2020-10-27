@@ -244,6 +244,27 @@ class MultimipDataset:
                     field_data_ups_cropped = field_data_ups[:, :, :tgt_size, :tgt_size]
                     tgt_field_dset[b] = helpers.get_np(field_data_ups_cropped[...])
 
+    def _upsample_field_direct(self, name, stage, src_mip, tgt_mip):
+        src_field_dset = self.get_field_dset(name=name, stage=stage, mip=src_mip)
+        tgt_img_dset = self.get_img_dset(name=name, mip=tgt_mip)
+        tgt_field_dset = self.load_field_dset(name=name, stage=stage, mip=tgt_mip,
+                                              shape=tgt_img_dset.shape, create=True)
+        scale_factor = 2**(src_mip-tgt_mip)
+
+        with torch.no_grad():
+            tgt_size = tgt_img_dset.shape[-1]
+
+            for b in range(src_field_dset.shape[0]):
+                field_data = helpers.to_tensor(src_field_dset[b:b+1])
+                field_data_ups = torch.nn.functional.interpolate(field_data,
+                                                     mode='bilinear',
+                                                     scale_factor=scale_factor,
+                                                     align_corners=False,
+                                                     recompute_scale_factor=False
+                                                     ) * scale_factor
+                field_data_ups_cropped = field_data_ups[:, :, :tgt_size, :tgt_size]
+                tgt_field_dset[b] = helpers.get_np(field_data_ups_cropped[...])
+
 
     def get_alignment_dset(self, mip, stage=None, start_index=0, end_index=None,
             crop_mode=None, cropped_size=None):
