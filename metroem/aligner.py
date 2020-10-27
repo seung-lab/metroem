@@ -150,7 +150,7 @@ class Aligner(nn.Module):
         self.finetune_sm = finetune_sm
         self.train = train
 
-    def forward(self, src_img, tgt_img, src_agg_field=None, tgt_agg_field=None,
+    def forward(self, src_img, tgt_img, src_agg_field=None, 
             src_folds=None, tgt_folds=None,
             finetune=None,
             finetune_iter=None,
