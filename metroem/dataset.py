@@ -418,8 +418,8 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         tgt_field = None
         if self.field_dset is not None:
             fields = self.field_dset[self.start_index + i]
-            src_field = helpers.to_tensor(fields[src_index, 2, x_slice, y_slice])
-            tgt_field = helpers.to_tensor(fields[tgt_index, 2, x_slice, y_slice])
+            src_field = helpers.to_tensor(fields[src_index, :, x_slice, y_slice])
+            tgt_field = helpers.to_tensor(fields[tgt_index, :, x_slice, y_slice])
         if tgt_field is not None:
             tgt_field = tgt_field.field()
             tgt = tgt_field.from_pixels()(tgt)
