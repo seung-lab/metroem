@@ -32,18 +32,19 @@ def get_dset_path(dst_folder,
                                                         suffix)
     return dst_folder / dset_name
 
-def write_tensor(dset, data, sample_index):
+def write_tensor(dset, data, sample_index, pair_index):
     """Write tensor to H5 file
 
     Args:
         dset (h5py.File)
         data (torch.Tensor): no leading identity dimensions
-        indices (Tuple)
+        sample_index (int)
+        pair_index (int)
     """
     if data.is_cuda:
         data = data.cpu()
     data = data.numpy()
-    dset[sample_index] = data
+    dset[sample_index, pair_index] = data
 
 def make_field_dset(dset_path, 
                   num_samples, 
@@ -67,12 +68,10 @@ def make_field_dset(dset_path,
     if chunk_size is None:
         chunk_size = patch_size
     data_name = 'field'
-    data_shape = [2, patch_size, patch_size]
-    chunk_shape = [2, 2, chunk_size, chunk_size]
     scaleoffset = 2
     df = h5py.File(dset_path, 'a')
-    dset_shape = (num_samples, *data_shape)
-    chunk_dim = (1, 1, *chunk_shape)
+    dset_shape = (num_samples, 2, 2, patch_size, patch_size)
+    chunk_dim = (1, 1, 2, chunk_size, chunk_size)
     if data_name in df:
         del df[data_name]
     dset = df.create_dataset(data_name,
@@ -115,9 +114,10 @@ def download_section_field(vol,
                         x_offset,
                         y_offset,
                         z_range,
-                        mip,
+                        dst_mip,
                         patch_size,
-                        sample_index):
+                        sample_index,
+                        pair_index):
     """Download field to H5 file and collect offset adjustments
 
     The field will not be used to warp the img and defects. Warping is handled 
@@ -130,29 +130,34 @@ def download_section_field(vol,
         vol (CloudVolume)
         dset (h5py.Dataset)
         offsets (h5py.Dataset): z x src/tgt x x/y translation
-        x_offset (int)
-        y_offset (int)
+        x_offset (int): vol.mip pixels
+        y_offset (int): vol.mip pixels
         z_range (slice): length one
-        mip (int)
-        patch_size (int)
+        dst_mip (int): MIP of dataset
+        patch_size (int): dst_mip pixels
         sample_index (int)
         pair_index (int): (src, tgt): (0, 1)
     """
-    field = vol[x_offset:x_offset + patch_size,
-                y_offset:y_offset + patch_size,
-                z_range]
-    field = np.transpose(field, (2,3,0,1))
-    field = torch.tensor(field).field_()
-    trans = field.mean_finite_vector(keepdim=True)
-    trans = (trans // (2**mip)) * 2**mip
-    offset = [int(trans[0,0,0,0]), int(trans[0,1,0,0])]
+    src_mip = vol.mip
+    assert(src_mip > dst_mip)
+    scale_factor = 2**(src_mip - dst_mip)
+    in_field = vol[x_offset:x_offset + (patch_size // scale_factor),
+                   y_offset:y_offset + (patch_size // scale_factor),
+                   z_range]
+    in_field = np.transpose(in_field, (2,3,0,1))
+    in_field = torch.tensor(in_field).field()
+    in_field = in_field.squeeze()
+    out_field = in_field.up(src_mip - dst_mip)
+    out_field = out_field[:, :patch_size, :patch_size]
+    trans = out_field.mean_finite_vector(keepdim=True)
+    trans = (trans // (2**dst_mip)) * 2**dst_mip
+    offset = [int(trans[0,0,0]), int(trans[1,0,0])]
     offsets[sample_index, pair_index, :] = offset
-    field -= trans
-    field = field.squeeze()
-    field = torch.flip(field, [0]) # reverse x,y components
-    field = field / (2**mip)
+    out_field -= trans
+    out_field = out_field / (2**dst_mip)
+    out_field = torch.flip(out_field, [0]) # reverse x,y components
     write_tensor(dset=dset,
-                 data=field,
+                 data=out_field,
                  sample_index=sample_index,
                  pair_index=pair_index)
 
@@ -160,7 +165,8 @@ def download_dataset_field(cv_path,
                         dst_folder, 
                         z_start, 
                         z_end,
-                        mip, 
+                        src_mip, 
+                        dst_mip,
                         x_offset=0, 
                         y_offset=0, 
                         patch_size=None,
@@ -174,7 +180,8 @@ def download_dataset_field(cv_path,
         offset_translations (dict): z: (x trans, y trans)
         z_start (int)
         z_end (int)
-        mip (int)
+        src_mip (int): MIP level of CloudVolume field
+        dst_mip (int): MIP level of output dataset
         x_offset (int): offset in MIP0 pixels; must be multiple of MIP factor
         y_offset (int): offset in MIP0 pixels; must be multiple of MIP factor
         patch_size (int): width & height of 2D region to download
@@ -187,13 +194,13 @@ def download_dataset_field(cv_path,
                               x_offset=x_offset,
                               y_offset=y_offset,
                               z_start=z_start,
-                              mip=mip,
+                              mip=dst_mip,
                               suffix=suffix)
     dset = make_field_dset(dset_path=dset_path,
                           num_samples=num_samples,
                           patch_size=patch_size)
     vol = CloudVolume(cv_path,
-                      mip=mip,
+                      mip=src_mip,
                       fill_missing=True,
                       bounded=False, 
                       progress=False, 
@@ -201,8 +208,8 @@ def download_dataset_field(cv_path,
     offsets = make_offset_dset(dset_path=dset_path, 
                                num_samples=num_samples, 
                                dtype=int)
-    x_offset //= 2**mip
-    y_offset //= 2**mip
+    x_offset //= 2**src_mip
+    y_offset //= 2**src_mip
     for sample_index, z in tqdm(enumerate(section_ids)):
         for pair_index in range(2):
             z_range = slice(z, z+1) if pair_index == 0 else slice(z-1, z)
@@ -212,7 +219,7 @@ def download_dataset_field(cv_path,
                                 x_offset=x_offset,
                                 y_offset=y_offset,
                                 z_range=z_range,
-                                mip=mip,
+                                dst_mip=dst_mip,
                                 patch_size=patch_size,
                                 sample_index=sample_index,
                                 pair_index=pair_index)
@@ -220,7 +227,8 @@ def download_dataset_field(cv_path,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='Create MetroEM field dataset via CloudVolume')
-    parser.add_argument('--mip',         type=int)
+    parser.add_argument('--src_mip',         type=int)
+    parser.add_argument('--dst_mip',         type=int)
     parser.add_argument('--patch_size',  type=int)
     parser.add_argument('--x_offset',    type=int, default=0)
     parser.add_argument('--y_offset',    type=int, default=0)
@@ -244,14 +252,15 @@ if __name__ == '__main__':
     dst_folder = Path(args.dst_folder)
     dst_folder.mkdir(parents=True, exist_ok=True)
 
-    assert(args.x_offset % 2**args.mip == 0)
-    assert(args.y_offset % 2**args.mip == 0)
+    assert(args.x_offset % 2**args.src_mip == 0)
+    assert(args.y_offset % 2**args.src_mip == 0)
 
     download_dataset_field(cv_path=args.cv_path,
                         dst_folder=dst_folder,
                         z_start=args.z_start, 
                         z_end=args.z_end,
-                        mip=args.mip, 
+                        src_mip=args.src_mip, 
+                        dst_mip=args.dst_mip, 
                         x_offset=args.x_offset, 
                         y_offset=args.y_offset, 
                         patch_size=args.patch_size,
