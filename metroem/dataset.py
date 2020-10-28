@@ -267,30 +267,30 @@ class MultimipDataset:
                     field_data_ups_cropped = field_data_ups[:, :, :tgt_size, :tgt_size]
                     tgt_field_dset[b] = helpers.get_np(field_data_ups_cropped[...])
 
-    def _upsample_field_direct(self, name, stage, mip_in, mip_out):
+    def _upsample_field_direct(self, name, stage, in_mip, out_mip):
         """Upsample a field datset from SRC_MIP to DST_MIP
 
         Args:
             name (str): filename of dataset (input & output)
             stage (int): module which created dataset (input & output)
-            mip_in (int): MIP level of the input dataset
-            mip_out (int): MIP level of the output dataset
+            in_mip (int): MIP level of the input dataset
+            out_mip (int): MIP level of the output dataset
         """
-        assert(mip_in > mip_out)
-        in_field_dset = self.get_field_dset(name=name, stage=stage, mip=mip_in)
-        dst_img_dset = self.get_img_dset(name=name, mip=mip_out)
+        assert(in_mip > out_mip)
+        in_field_dset = self.get_field_dset(name=name, stage=stage, mip=in_mip)
+        dst_img_dset = self.get_img_dset(name=name, mip=out_mip)
         out_field_dset = self.load_field_dset(name=name, 
                                               stage=stage, 
-                                              mip=mip_out,
+                                              mip=out_mip,
                                               shape=dst_img_dset.shape,
                                               create=True)
-        scale_factor = 2**(mip_in - mip_out)
+        scale_factor = 2**(in_mip - out_mip)
 
         with torch.no_grad():
             dst_size = dst_img_dset.shape[-1]
             for n in range(in_field_dset.shape[0]):
                 for i in range(in_field_dset.shape[1]):
-                    in_field = helpers.to_tensor(in_field_dset[b:b+1,i])
+                    in_field = helpers.to_tensor(in_field_dset[n:n+1,i])
                     out_field = torch.nn.functional.interpolate(in_field,
                                                      mode='bilinear',
                                                      scale_factor=scale_factor,
@@ -400,8 +400,8 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         src_index = 0
         tgt_index = 1
         if self.permute_pairs:
-            i = i // 2
             swap_src_tgt = i % 2
+            i = i // 2
             if swap_src_tgt:
                 src_index, tgt_index = tgt_index, src_index
         x_bot, x_top, y_bot, y_top = self._get_crop_coords()
