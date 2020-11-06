@@ -1,0 +1,42 @@
+{
+    "image": {
+        "path": "gs://image",
+        "src_mip": 5,
+        "reference": {
+            "path": "gs://iamge",
+            "src_mip": 5,
+            "dst_mip": 5,
+            "x_size": 2048,
+            "y_size": 2048
+        }
+    },
+    "field": {
+        "path": "gs://field",
+        "src_mip": 8,
+        "reference": {
+            "path": "gs://field",
+            "src_mip": 8,
+            "dst_mip": 5,
+            "x_size": 2048,
+            "y_size": 2048
+        }
+    },
+    "masks": [
+        {
+            "path": "gs://mask1",
+            "src_mip": 6,
+            "threshold": 178
+        },
+        {
+            "path": "gs://mask2",
+            "src_mip": 4,
+            "threshold": 178
+        }
+    ],
+    "max_mip": 8,
+    "dst_mip": 5,
+    "x_size": 2048,
+    "y_size": 2048,
+    "pairs": [
+    ]
+}
