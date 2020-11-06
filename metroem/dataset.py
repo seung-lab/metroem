@@ -168,12 +168,14 @@ class MultimipDataset:
             if "field" in field_file:
                 del field_file["field"]
 
-            field_shape = (shape[0], 2, 2, shape[-2], shape[-1])
-            chunks = (1, 1, 1, shape[-2], shape[-1])
+            field_shape = (shape[0], 2, shape[-2], shape[-1])
+            chunks = (1, 2, shape[-2], shape[-1])
             field_dset = field_file.create_dataset("main", 
                     shape=field_shape,
                     dtype=np.float32,
-                    chunks=chunks
+                    chunks=chunks,
+                    compression='lzf',
+                    scaleoffset=2
                     )
         else:
             if "main" in field_file:
@@ -229,20 +231,16 @@ class MultimipDataset:
         Pairs are permutable, so predict field for src,tgt as well as tgt,src
         """
         for b in range(img_dset.shape[0]):
-            src_index, tgt_index = 0, 1
-            for i in range(2):
-                if i == 1:
-                    src_index, tgt_index = tgt_index, src_index
-                src = helpers.to_tensor(img_dset[b, src_index])
-                tgt = helpers.to_tensor(img_dset[b, tgt_index])
-                if prev_field_dset is not None:
-                    prev_field = helpers.to_tensor(prev_field_dset[b, src_index])
-                else:
-                    prev_field = None
+            src = helpers.to_tensor(img_dset[b, 0])
+            tgt = helpers.to_tensor(img_dset[b, 1])
+            if prev_field_dset is not None:
+                prev_field = helpers.to_tensor(prev_field_dset[b])
+            else:
+                prev_field = None
 
-                field = model(src_img=src, tgt_img=tgt, src_agg_field=prev_field, train=False,
-                        return_state=False)
-                field_dset[b,src_index] = helpers.get_np(field)
+            field = model(src_img=src, tgt_img=tgt, src_agg_field=prev_field, train=False,
+                    return_state=False)
+            field_dset[b] = helpers.get_np(field)
 
     def _upsample_field(self, name, stage, mip_start, mip_end):
         for src_mip in range(mip_start, mip_end - 1, -1):
@@ -284,21 +282,23 @@ class MultimipDataset:
                                               mip=out_mip,
                                               shape=dst_img_dset.shape,
                                               create=True)
-        scale_factor = 2**(in_mip - out_mip)
+        # scale_factor = 2**(in_mip - out_mip)
 
         with torch.no_grad():
             dst_size = dst_img_dset.shape[-1]
             for n in range(in_field_dset.shape[0]):
-                for i in range(in_field_dset.shape[1]):
-                    in_field = helpers.to_tensor(in_field_dset[n:n+1,i])
-                    out_field = torch.nn.functional.interpolate(in_field,
-                                                     mode='bilinear',
-                                                     scale_factor=scale_factor,
-                                                     align_corners=False,
-                                                     recompute_scale_factor=False
-                                                     ) * scale_factor
-                    out_field_cropped = out_field[:, :, :dst_size, :dst_size]
-                    out_field_dset[n,i] = helpers.get_np(out_field_cropped[...])
+                in_field = helpers.to_tensor(in_field_dset[n:n+1]).field()
+                in_field = in_field * (2**in_mip)
+                out_field = in_field.up(mips=in_mip - out_mip)
+                out_field = out_field / (2**out_mip)
+                # out_field = torch.nn.functional.interpolate(in_field,
+                #                                  mode='bilinear',
+                #                                  scale_factor=scale_factor,
+                #                                  align_corners=False,
+                #                                  recompute_scale_factor=False
+                #                                  ) * scale_factor
+                out_field_cropped = out_field[0, :, :dst_size, :dst_size]
+                out_field_dset[n] = helpers.get_np(out_field_cropped[...])
 
 
     def get_alignment_dset(self, mip, stage=None, start_index=0, end_index=None,
@@ -355,8 +355,7 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
                 start_index, 
                 end_index,
                 crop_mode=None, 
-                cropped_size=None,
-                permute_pairs=True):
+                cropped_size=None):
         self.img_dset = img_dset
         self.field_dset = field_dset
 
@@ -369,17 +368,12 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         self.shape = self.img_dset[0].shape
         self.crop_mode = crop_mode
         self.cropped_size = cropped_size
-        self.permute_pairs = permute_pairs
 
     def __len__(self):
-        n = self.end_index - self.start_index
-        if self.permute_pairs:
-            n *= 2
-        return n
+        return self.end_index - self.start_index
 
     def set_size_limit(self, n):
         if n < len(self):
-            n = n // 2 if self.permute_pairs else n
             self.end_index = self.start_index + n
 
     def _get_crop_coords(self):
@@ -397,32 +391,20 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         return x_bot, x_top, y_bot, y_top
 
     def __getitem__(self, i):
-        src_index = 0
-        tgt_index = 1
-        if self.permute_pairs:
-            swap_src_tgt = i % 2
-            i = i // 2
-            if swap_src_tgt:
-                src_index, tgt_index = tgt_index, src_index
         x_bot, x_top, y_bot, y_top = self._get_crop_coords()
         x_slice = slice(x_bot, x_top)
         y_slice = slice(y_bot, y_top)
 
         img = self.img_dset[self.start_index + i]
-        src = helpers.to_tensor(img[src_index, x_slice, y_slice])
-        tgt = helpers.to_tensor(img[tgt_index, x_slice, y_slice])
+        src = helpers.to_tensor(img[0, x_slice, y_slice])
+        tgt = helpers.to_tensor(img[1, x_slice, y_slice])
         src[src < -4] = 0
         tgt[tgt < -4] = 0
 
-        src_field = None
-        tgt_field = None
+        field = None
         if self.field_dset is not None:
-            fields = self.field_dset[self.start_index + i]
-            src_field = helpers.to_tensor(fields[src_index, :, x_slice, y_slice])
-            tgt_field = helpers.to_tensor(fields[tgt_index, :, x_slice, y_slice])
-        if tgt_field is not None:
-            tgt_field = tgt_field.field()
-            tgt = tgt_field.from_pixels()(tgt)
+            full_field = self.field_dset[self.start_index + i]
+            field = helpers.to_tensor(full_field[...,x_bot:x_top, y_bot:y_top])
 
         bundle = {
             "src": src,
@@ -430,8 +412,8 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
             "src_zeros": src == 0,
             "tgt_zeros": tgt == 0,
                 }
-        if src_field is not None:
-            bundle["src_field"] = src_field
+        if field is not None:
+            bundle["src_field"] = field
         return bundle
 
 def get_random_crop_coords(full_shape, cropped_size):
