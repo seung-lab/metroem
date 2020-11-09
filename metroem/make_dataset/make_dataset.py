@@ -85,7 +85,7 @@ class CloudField(CloudTensor):
         return field.up(mips=src_mip - dst_mip)
 
 class Reference():
-    """CloudTensor with MIP0 bbox
+    """CloudTensor with fixed size MIP0 bbox
     """
     def __init__(self, cloudtensor, bbox, dst_mip):
         self.vol = cloudtensor
@@ -93,7 +93,12 @@ class Reference():
         self.dst_mip = dst_mip
     
     def get(self, bbox):
-        return self.vol.get(self.bbox + bbox.minpt, dst_mip=self.dst_mip)
+        return self.vol.get(self.adjust_bbox(bbox), dst_mip=self.dst_mip)
+
+    def adjust_bbox(self, bbox):
+        """Use input bbox minpt to create ref bbox of fixed size.
+        """
+        return self.bbox + bbox.minpt
     
     @property
     def mip(self):
@@ -172,11 +177,12 @@ class Image():
         im = self.vol.get(bbox, dst_mip)
         im_black = im == 0
         if normalize:
+            adj_bbox = self.ref.adjust_bbox(bbox)
             if self.ref.mip == self.vol.mip:
                 ref_im = im
             else:
-                ref_im = self.ref.get(bbox)
-            ref_masks = self.masks.get(bbox, self.ref.mip)
+                ref_im = self.ref.get(adj_bbox)
+            ref_masks = self.masks.get(adj_bbox, self.ref.mip)
             ref_im = ref_im[~ref_masks]
             ref_im = ref_im[ref_im != 0]
             ref_im = ref_im[ref_im == ref_im]
