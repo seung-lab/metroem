@@ -59,7 +59,6 @@ def aligner_train_loop(rank,
                                   [0], 
                                   reverse,
                                   checkpoint_folder=checkpoint_folder)
-    dist.barrier()
     for epoch in range(num_epochs):
         count = 0
         s = time.time()
@@ -130,10 +129,10 @@ def aligner_train_loop(rank,
                     checkpoint_folder=checkpoint_folder)
             times = []
             running_loss = 0.0
-        dist.barrier()
-        # synchronize processes from same checkpoint
-        map_location = {'cuda:%d' % 0: 'cuda:%d' % rank}
-        model.load_state_dict(checkpoint_folder, map_location=map_location)
+        # dist.barrier()
+        # # synchronize processes from same checkpoint
+        # map_location = {'cuda:%d' % 0: 'cuda:%d' % rank}
+        # model.module.aligner.load_checkpoint(checkpoint_folder, map_location=map_location)
 
 
 def aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_loss, times, reverse,
@@ -155,4 +154,4 @@ def aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_l
         print ("Epoch {}: Tra: {:.2E}, {}, T: {:.4}sec".format(epoch, float(train_loss), val_report, np.mean(times)))
 
         sys.stdout.flush()
-        model.save_state_dict(checkpoint_folder=checkpoint_folder)
+        model.module.aligner.save_checkpoint(checkpoint_folder=checkpoint_folder)

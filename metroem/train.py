@@ -71,7 +71,7 @@ def train_module(rank,
     assert aug_params is None
     print(f"Running DDP on rank {rank}.")
     setup(rank, world_size)
-    # torch.cuda.set_device(rank)
+    torch.cuda.set_device(rank)
     model = modelhouse.load_model_simple(module_path,
                                          finetune=False,
                                          pass_field=True,
@@ -217,6 +217,7 @@ def main():
     parser.add_argument('--gpu', type=str, default="0")
     parser.add_argument('--train_stages', type=int, default=None, nargs='+')
     parser.add_argument('--generate_field_stages', type=int, default=None, nargs='+')
+    parser.add_argument('--port', type=int, default=8888)
 
     parser.add_argument('--no_redirect_stdout', dest='redirect_stdout',
                         action='store_false')
@@ -238,7 +239,7 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
 
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '7777'
+    os.environ['MASTER_PORT'] = str(args.port)
 
     if args.redirect_stdout:
         log_path = os.path.join(args.pyramid_path, f"{args.checkpoint_name}.log")

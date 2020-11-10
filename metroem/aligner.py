@@ -225,11 +225,11 @@ class Aligner(nn.Module):
         else:
             return pred_res.field()
 
-    def save_state_dict(self, checkpoint_folder):
+    def save_checkpoint(self, checkpoint_folder):
         path = os.path.join(checkpoint_folder, f"{self.net.name}.state.pth.tar")
         torch.save(self.net.state_dict(), path)
 
-    def load_state_dict(self, checkpoint_folder, map_location):
+    def load_checkpoint(self, checkpoint_folder, map_location):
         """Load from checkpoint
 
         Args:
