@@ -101,7 +101,6 @@ def create_model(checkpoint_folder, device='cpu', checkpoint_name="checkpoint"):
 
     return my_p
 
-
 def load_my_state_dict(model, state_dict, delta=0):
     own_state = model.state_dict()
 
@@ -229,3 +228,18 @@ class Aligner(nn.Module):
     def save_state_dict(self, checkpoint_folder):
         path = os.path.join(checkpoint_folder, f"{self.net.name}.state.pth.tar")
         torch.save(self.net.state_dict(), path)
+
+    def load_state_dict(self, checkpoint_folder, map_location):
+        """Load from checkpoint
+
+        Args:
+            checkpoint_folder (str): path to checkpoint
+            map_lcation (dict): {'cuda:0' : 'cudaN'}
+        """
+        checkpoint_path = os.path.join(checkpoint_folder,
+                                       f"{self.net.name}.state.pth.tar")
+        if  os.path.isfile(checkpoint_path):
+            load_my_state_dict(self,
+                               torch.load(checkpoint_path,
+                                          map_location=map_location))
+
