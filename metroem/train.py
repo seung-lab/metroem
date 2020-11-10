@@ -116,6 +116,8 @@ def train_pyramid(pyramid_path, dataset_path, train_stages, checkpoint_name,
                                                  pass_field=True,
                                                  checkpoint_name=checkpoint_name)
             model
+            if torch.cuda.device_count() > 1:
+                model = torch.nn.DataParallel(model)
             if str(module_mip) not in train_params:
                 raise Exception(f"Training parameters not specified for mip {module_mip}")
 
