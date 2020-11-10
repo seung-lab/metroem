@@ -6,6 +6,8 @@ import time
 
 from metroem import loss
 
+import torch.distributed as dist
+
 from pdb import set_trace as st
 
 def align_sample(model, bundle, train=False):
@@ -26,19 +28,38 @@ def align_sample(model, bundle, train=False):
     return bundle
 
 
-def aligner_train_loop(model, mip_in, train_loader, val_loader, optimizer,
-          print_every=50, num_epochs=1000, loss_fn=None, reverse=True,
-          manual_run_transform_def={}, manual_loss_transform_def={},
-          checkpoint_folder='./checkpoints', loss_from_state=False,
-          augmentor=None):
+def aligner_train_loop(rank,
+                       model, 
+                       mip_in, 
+                       train_loader, 
+                       val_loader, 
+                       optimizer,
+                       print_every=50, 
+                       num_epochs=1000, 
+                       loss_fn=None, 
+                       reverse=True,
+                       manual_run_transform_def={}, 
+                       manual_loss_transform_def={},
+                       checkpoint_folder='./checkpoints', 
+                       loss_from_state=False,
+                       augmentor=None):
     times = []
     count = 0
     running_loss = 0.0
     if loss_fn == None:
         loss_fn = model.loss
 
-    aligner_validate_and_save(val_loader, model, loss_fn, mip_in, 0, 0, [0], reverse,
-                      checkpoint_folder=checkpoint_folder)
+    if rank == 0:
+        aligner_validate_and_save(val_loader, 
+                                  model, 
+                                  loss_fn, 
+                                  mip_in, 
+                                  0, 
+                                  0, 
+                                  [0], 
+                                  reverse,
+                                  checkpoint_folder=checkpoint_folder)
+    dist.barrier()
     for epoch in range(num_epochs):
         count = 0
         s = time.time()
@@ -93,22 +114,26 @@ def aligner_train_loop(model, mip_in, train_loader, val_loader, optimizer,
 
             count += 1
 
-            if print_every is not None and ((count + 1) % print_every == 0):
-                train_loss = running_loss / count
-                aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_loss,
-                        times, reverse,
-                        checkpoint_folder=checkpoint_folder)
+            # if print_every is not None and ((count + 1) % print_every == 0):
+            #     train_loss = running_loss / count
+            #     aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_loss,
+            #             times, reverse,
+            #             checkpoint_folder=checkpoint_folder)
 
-                running_loss = 0.0
+            #     running_loss = 0.0
             s = time.time()
 
-        if print_every is None:
+        if (print_every is None) and (rank == 0):
             train_loss = running_loss / count
             aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_loss,
                     times, reverse,
                     checkpoint_folder=checkpoint_folder)
             times = []
             running_loss = 0.0
+        dist.barrier()
+        # synchronize processes from same checkpoint
+        map_location = {'cuda:%d' % 0: 'cuda:%d' % rank}
+        model.load_state_dict(checkpoint_folder, map_location=map_location)
 
 
 def aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_loss, times, reverse,
