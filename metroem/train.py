@@ -14,12 +14,11 @@ from metroem import loss, augmentations
 from metroem.alignment import aligner_train_loop
 from metroem.dataset import MultimipDataset
 
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.distributed as dist
+
 from pdb import set_trace as st
-
-
-#class MyDataParallel(torch.nn.DataParallel):
-#    def __getattr__(self, name):
-#        return getattr(self.module, name)
 
 def get_pyramid_modules(pyramid_path):
     module_dict = {}
@@ -39,13 +38,56 @@ def get_pyramid_modules(pyramid_path):
 
     return module_dict
 
+def setup(rank, world_size):
+    dist.init_process_group(
+            backend='nccl',
+            init_method='env://',
+            world_size=world_size,
+            rank=rank)
 
-def train_module(model, train_params, train_dset, val_dset,
-        checkpoint_path, aug_params=None):
+def cleanup():
+    dist.destroy_process_group()
+
+def train_module(rank, 
+                 world_size,
+                 module_path, 
+                 train_params, 
+                 dataset_path,
+                 module_mip,
+                 stage,
+                 checkpoint_name, 
+                 aug_params=None):                
+    """Train object with its own dataset (specific MIP)
+
+    Args:
+        module_path (str): path to modelhouse directory
+        train_params (dict)
+        train_dset (AlignmentDataLoader)
+        val_dset (AlignmentDataLoader)
+        checkpoint_name (str)
+        rank (int): process, dictates the GPU used in multi-gpu training
+        world_size (int): total no. of processes
+    """
     assert aug_params is None
+    print(f"Running DDP on rank {rank}.")
+    setup(rank, world_size)
+    torch.cuda.set_device(rank)
+    model = modelhouse.load_model_simple(module_path,
+                                         finetune=False,
+                                         pass_field=True,
+                                         checkpoint_name=checkpoint_name)
+    checkpoint_path = os.path.join(module_path, "model")
+    model.aligner.net = model.aligner.net.to(rank)
+    model = DDP(model, device_ids=[rank])
 
-    val_data_loader = torch.utils.data.DataLoader(val_dset, batch_size=1, shuffle=True,
-            num_workers=0, pin_memory=False)
+    dataset = MultimipDataset(dataset_path, aug_params, field_tag=checkpoint_name)
+    train_dset = dataset.get_train_dset(mip=module_mip, stage=stage)
+    val_dset = dataset.get_val_dset(mip=module_mip, stage=stage)
+    val_data_loader = torch.utils.data.DataLoader(val_dset, 
+                                                  batch_size=1, 
+                                                  shuffle=True,
+                                                  num_workers=0, 
+                                                  pin_memory=False)
 
     trainable = []
     trainable.extend(list(model.parameters()))
@@ -69,8 +111,10 @@ def train_module(model, train_params, train_dset, val_dset,
         loss_spec = epoch_params["loss_spec"]
         loss_type = epoch_params["loss_spec"]["type"]
 
-        simple_loss = loss.unsupervised_loss(smoothness, use_defect_mask=True,
-                sm_keys_to_apply=sm_keys_to_apply, mse_keys_to_apply=mse_keys_to_apply)
+        simple_loss = loss.unsupervised_loss(smoothness, 
+                                             use_defect_mask=True,
+                                             sm_keys_to_apply=sm_keys_to_apply, 
+                                             mse_keys_to_apply=mse_keys_to_apply)
         if loss_type == "plain":
             training_loss = simple_loss
         elif loss_type == "metric":
@@ -85,23 +129,44 @@ def train_module(model, train_params, train_dset, val_dset,
             augmentor = augmentations.Augmentor(epoch_params["augmentations"])
 
         train_dset.set_size_limit(num_samples)
-        train_data_loader = torch.utils.data.DataLoader(train_dset, batch_size=1, shuffle=True,
-                num_workers=0, pin_memory=False)
+        # Divide dataset across processes
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+                                train_dset,
+                                num_replicas=world_size,
+                                rank=rank)
+        train_data_loader = torch.utils.data.DataLoader(train_dset, 
+                                                        batch_size=1, 
+                                                        shuffle=False,
+                                                        num_workers=0, 
+                                                        pin_memory=False,
+                                                        sampler=train_sampler)
 
         optimizer = torch.optim.Adam(trainable, lr=lr, weight_decay=0)
-        aligner_train_loop(model, 0, train_data_loader, val_data_loader, optimizer,
-                num_epochs=num_epochs, loss_fn=training_loss,
-                print_every=print_every, checkpoint_folder=checkpoint_path,
-                augmentor=augmentor)
-
+        aligner_train_loop(rank,
+                           model, 
+                           mip_in=0, 
+                           train_loader=train_data_loader, 
+                           val_loader=val_data_loader, 
+                           optimizer=optimizer,
+                           num_epochs=num_epochs, 
+                           loss_fn=training_loss,
+                           print_every=print_every, 
+                           checkpoint_folder=checkpoint_path,
+                           augmentor=augmentor)
+    cleanup()
     pass
 
-def train_pyramid(pyramid_path, dataset_path, train_stages, checkpoint_name,
-        generate_field_stages, train_params=None, aug_params=None):
+def train_pyramid(world_size,
+                  pyramid_path, 
+                  dataset_path, 
+                  train_stages, 
+                  checkpoint_name,
+                  generate_field_stages, 
+                  train_params=None, 
+                  aug_params=None):
     pyramid_path = os.path.expanduser(pyramid_path)
     module_dict = get_pyramid_modules(pyramid_path)
     print (f"Loading dataset {dataset_path}...")
-    dataset = MultimipDataset(dataset_path, aug_params, field_tag=checkpoint_name)
 
     prev_mip = None
     for stage in sorted(module_dict.keys()):
@@ -111,19 +176,22 @@ def train_pyramid(pyramid_path, dataset_path, train_stages, checkpoint_name,
 
         if train_stages is None or stage in train_stages:
             print (f"Training module {stage}...")
-            model = modelhouse.load_model_simple(module_path,
-                                                 finetune=False,
-                                                 pass_field=True,
-                                                 checkpoint_name=checkpoint_name)
-            model
-            if str(module_mip) not in train_params:
-                raise Exception(f"Training parameters not specified for mip {module_mip}")
-
             mip_train_params = train_params[str(module_mip)]
-            train_module(model, train_params=mip_train_params,
-                    train_dset=dataset.get_train_dset(mip=module_mip, stage=stage),
-                    val_dset=dataset.get_val_dset(mip=module_mip, stage=stage),
-                    checkpoint_path=os.path.join(module_path, "model"))
+            mp.spawn(train_module,
+                     args=(world_size,
+                           module_path,
+                           mip_train_params, # train_params
+                           dataset_path, # dataset_path
+                           module_mip, # module_mip
+                           stage, # stage
+                           checkpoint_name, # checkpoint_name
+                           None), # aug_params
+                     nprocs=world_size,
+                     join=True)
+           #  train_module(model, train_params=mip_train_params,
+           #          train_dset=dataset.get_train_dset(mip=module_mip, stage=stage),
+           #          val_dset=dataset.get_val_dset(mip=module_mip, stage=stage),
+           #          checkpoint_path=os.path.join(module_path, "model"))
 
             print (f"Done training module {stage}!")
 
@@ -149,6 +217,7 @@ def main():
     parser.add_argument('--gpu', type=str, default="0")
     parser.add_argument('--train_stages', type=int, default=None, nargs='+')
     parser.add_argument('--generate_field_stages', type=int, default=None, nargs='+')
+    parser.add_argument('--port', type=int, default=8888)
 
     parser.add_argument('--no_redirect_stdout', dest='redirect_stdout',
                         action='store_false')
@@ -165,16 +234,20 @@ def main():
     with open(params_path) as f:
         train_params = json.load(f)
 
+    world_size = len(args.gpu.split(','))
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
+
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = str(args.port)
 
     if args.redirect_stdout:
         log_path = os.path.join(args.pyramid_path, f"{args.checkpoint_name}.log")
         log_file = open(log_path, 'a')
         sys.stdout = log_file
 
-
-    train_pyramid(pyramid_path=args.pyramid_path,
+    train_pyramid(world_size=world_size,
+                  pyramid_path=args.pyramid_path,
                   dataset_path=args.dataset_path,
                   train_stages=args.train_stages,
                   generate_field_stages=args.generate_field_stages,
