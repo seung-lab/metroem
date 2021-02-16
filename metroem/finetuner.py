@@ -124,14 +124,14 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                     new_best_ago -= 5
                 prev_loss.append(curr_loss)
 
-                optimizer.zero_grad()
-                loss_var.backward()
-                #torch.nn.utils.clip_grad_norm([pre_res, post_res], 4e0)
-                pre_res.grad[pre_res.grad != pre_res.grad] = 0
-                post_res.grad[post_res.grad != post_res.grad] = 0
-                optimizer.step()
-            if lr_halfed_count >= 15 or nan_count > 15:
-                break
+            optimizer.zero_grad()
+            loss_var.backward()
+            #torch.nn.utils.clip_grad_norm([pre_res, post_res], 4e0)
+            pre_res.grad[pre_res.grad != pre_res.grad] = 0
+            post_res.grad[post_res.grad != post_res.grad] = 0
+            optimizer.step()
+        if lr_halfed_count >= 15 or nan_count > 15:
+            break
 
 
     loss_bundle['pred_res'] = combine_pre_post(pred_res, prev_pre_res, prev_post_res)
