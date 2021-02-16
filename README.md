@@ -39,6 +39,10 @@ one field for each image in an image set.
 Image datasets may be created from CloudVolumes.
 For models with multiple modules, the image set of each module
 must be aligned in physical space across the span of MIP levels.  
+Images should be normalized (mean=0, std=1) over a larger field
+of view than the model. 
+See [`corgie`](https://github.com/supersergiy/corgie_release) 
+for a method to normalize CloudVolumes.
 
 To create a dataset from a CloudVolume, use `download_image.py`.
 For example,
