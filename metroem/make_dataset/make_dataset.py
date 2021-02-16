@@ -241,7 +241,18 @@ class Field():
         field = field / (2**dst_mip)
         return field, offset
 
-def download_sample(bbox, image, field):
+def download_sample(bbox, image):
+    """Download masked image pair to dst
+
+    Args:
+        bbox (Bbox): MIP0
+        image (Image)
+    """
+    mip = image.mip
+    sample_image = image.get(bbox, mip)
+    return sample_image
+
+def download_sample_with_field(bbox, image, field):
     """Download warped and masked image pair to dst
 
     Args:
@@ -256,16 +267,17 @@ def download_sample(bbox, image, field):
     return sample_field, sample_image
 
 def write_to_cloudvolume(vol, data, sample_id):
-    """Write warped image to CloudVolume
+    """Write image (warped if field present) to CloudVolume
 
     Args:
         vol (CloudVolume)
         data (dict): label, torch.Tensor
         sample_id (int)
     """
-    f = data['field'].from_pixels()
     im = data['image']
-    im = f(im)
+    if 'field' in data.keys():
+        f = data['field'].from_pixels()
+        im = f(im)
     im = im.permute((2,3,0,1))
     # im = torch.round(im).to(dtype=torch.uint8)
     if im.is_cuda:
@@ -405,26 +417,15 @@ def make_dataset(spec, dst_path, to_cloudvolume=False):
     Dataset will contain warped & masked src,tgt image pairs
 
     Args:
-        spec (dict): specification object
-            {"image_mip":
-             "image_path":
-             "field_mip":
-             "field_path":
-             "mask_mip":
-             "mask_path":
-             "ref_mip":
-             "ref_x_size":
-             "ref_y_size":
-             "pairs": [
-                        {"src": ...,
-                         "tgt": ...}
-            ]}
+        spec (dict): specification object; see README.md
         dst_path (str): CloudVolume path
         to_cloudvolume (bool)
     """
     parallel = spec.get('parallel', 1)
     masks = Masks.from_spec(spec['masks'], parallel=parallel) 
-    field = Field.from_spec(spec['field'], parallel=parallel) 
+    field = None
+    if 'field' in spec.keys():
+        field = Field.from_spec(spec['field'], parallel=parallel) 
     image = Image.from_spec(spec['image'], masks=masks, parallel=parallel) 
     bbox = spec_to_bbox(spec)
     if to_cloudvolume:
@@ -435,24 +436,32 @@ def make_dataset(spec, dst_path, to_cloudvolume=False):
     else:
         dst = get_h5_dset(spec=spec, dst_path=dst_path)
 
+
     for k, pair in enumerate(spec['pairs']):
         for i, sample_spec in enumerate(pair):
             offset = Vec(sample_spec['x_start'],
-                             sample_spec['y_start'],
-                             sample_spec['z_start'])
-            f, im = download_sample(bbox=bbox+offset,
-                                    image=image,
-                                    field=field)
-            data = {'field': f, 'image': im}
+                         sample_spec['y_start'],
+                         sample_spec['z_start'])
+            if field is None:
+                im = download_sample(bbox=bbox+offset,
+                                     image=image)    
+                data = {'image': im}
+            else:
+                f, im = download_sample(bbox=bbox+offset,
+                                        image=image,
+                                        field=field)
+                data = {'field': f, 'image': im}
+                if not to_cloudvolume:
+                    if i % 2 == 1:
+                        del data['field']
+                        im = f.from_pixels()(im)
+                        data['image'] = im
+
             sample_id = 2*k + i
             print('Writing sample {}'.format(sample_id))
             if to_cloudvolume:
                 write_to_cloudvolume(dst, data=data, sample_id=sample_id)
             else:
-                if i % 2 == 1:
-                    del data['field']
-                    im = f.from_pixels()(im)
-                    data['image'] = im
                 write_to_h5(dst, data=data, sample_id=sample_id)
             
 
@@ -462,7 +471,8 @@ if __name__ == '__main__':
     parser.add_argument('--spec_path', type=str,
             help='See create_spec.py')
     parser.add_argument('--dst_path',  type=str,
-            help='Use local path to create H5 file; use cloudpath to create new CloudVolume')
+            help='Use local path to create H5 file; \
+                    use cloudpath to create new CloudVolume')
     parser.add_argument('--parallel',  type=int, default=1)
 
     args = parser.parse_args()
