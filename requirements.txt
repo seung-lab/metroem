@@ -3,9 +3,10 @@ numpy
 cloud-volume
 torch
 torchvision
-git+git://https://github.com/seung-lab/modelhouse@tmacrina-load-model-simple
+git+git://https://github.com/supersergiy/modelhouse
 #modelhouse
 scikit-image
 artificery
 torchfields
 jupyterlab
+ipywidgets
