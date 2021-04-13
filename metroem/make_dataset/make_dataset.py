@@ -40,8 +40,8 @@ def bbox_to_mip(bbox, from_mip, to_mip):
     """
     factor = 2**(to_mip - from_mip)
     scale = Vec(factor, factor, 1)
-    dst_minpt = np.floor(bbox.minpt / scale).astype(np.int)
-    dst_size = np.floor(bbox.size3() / scale).astype(np.int)
+    dst_minpt = np.floor(bbox.minpt / scale).astype(int)
+    dst_size = np.floor(bbox.size3() / scale).astype(int)
     return Bbox(dst_minpt, dst_minpt+dst_size)
 
 class CloudTensor():
@@ -447,7 +447,7 @@ def make_dataset(spec, dst_path, to_cloudvolume=False):
                                      image=image)    
                 data = {'image': im}
             else:
-                f, im = download_sample(bbox=bbox+offset,
+                f, im = download_sample_with_field(bbox=bbox+offset,
                                         image=image,
                                         field=field)
                 data = {'field': f, 'image': im}
