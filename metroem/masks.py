@@ -1,6 +1,7 @@
 import torch
 import torchfields
 
+import scipy
 import numpy as np
 import skimage
 import h5py
@@ -179,9 +180,30 @@ def coarsen_mask(mask, n=1, flip=True):
             k = torch.nn.Parameter(data=kernel_var, requires_grad=False)
             if flip:
                 mask = mask.logical_not().float()
-            mask =  (torch.nn.functional.conv2d(mask.unsqueeze(1),
+            while len(mask.shape) < 4:
+                mask = mask.unsqueeze(0)
+            mask =  (torch.nn.functional.conv2d(mask,
                 kernel_var, padding=1) > 1).squeeze(1)
             if flip:
                 mask = mask.logical_not()
             mask = mask.float()
     return mask
+
+
+def dilate(a):
+    return scipy.ndimage.morphology.binary_dilation(a != 0)
+    conn = scipy.ndimage.generate_binary_structure(2, 2)
+    return scipy.ndimage.morphology.binary_dilation(a, conn)
+
+
+def erode(a):
+    return scipy.ndimage.morphology.binary_erosion(a != 0)
+
+
+def closing(a, n=2):
+    result = a
+    for _ in range(n):
+        result = dilate(result != 0)
+    for _ in range(n):
+        result = erode(result != 0)
+    return result

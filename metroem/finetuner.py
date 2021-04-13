@@ -18,15 +18,16 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       crop=16,
                       opt_res_coarsness=0, wd=1e-3, l2=0.0,
                       gridsample_mode="bilinear",
+                      normalize=True,
                       sm_keys_to_apply={},
                       mse_keys_to_apply={}):
-
-    opti_loss = unsupervised_loss(smoothness_factor=sm, use_defect_mask=True,
-                              sm_keys_to_apply=sm_keys_to_apply,
-                              mse_keys_to_apply=mse_keys_to_apply
-                          )
-    sdb = False
+    opti_loss = unsupervised_loss(
+          smoothness_factor=sm, use_defect_mask=True,
+          sm_keys_to_apply=sm_keys_to_apply,
+          mse_keys_to_apply=mse_keys_to_apply
+      )
     pred_res = initial_res.clone().detach().field()
+    pred_res = pred_res.down(opt_res_coarsness)
     pred_res.requires_grad = False
 
     pre_res = torch.zeros_like(pred_res, device=pred_res.device).field().detach()
@@ -51,13 +52,13 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     prev_loss = []
 
     s = time.time()
-    with torch.no_grad():
-        loss_bundle = helpers.normalize_bundle(loss_bundle, per_feature_var=True, mask_fill=0)
+    if normalize:
+        with torch.no_grad():
+            loss_bundle = helpers.normalize_bundle(loss_bundle, per_feature_var=True, mask_fill=0)
 
-    loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res)
+    loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res).up(opt_res_coarsness)
 
     loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
-
     loss_dict = opti_loss(loss_bundle, crop=crop)
     best_loss = loss_dict['result'].cpu().detach().numpy()
     new_best_ago = 0
@@ -68,10 +69,9 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
 
     for epoch in range(num_iter):
-        loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res)
+        loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res).up(opt_res_coarsness)
+
         loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
-        if sdb:
-            import pdb; pdb.set_trace()
         loss_dict = opti_loss(loss_bundle, crop=crop)
         loss_var = loss_dict['result']
         #print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
@@ -80,9 +80,6 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
         #print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
         if np.isnan(curr_loss):
-            if sdb:
-                print ("NAN LOSS")
-                import pdb; pdb.set_trace()
             nan_count += 1
             lr /= 1.5
             lr_halfed_count += 1
@@ -130,11 +127,13 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
             pre_res.grad[pre_res.grad != pre_res.grad] = 0
             post_res.grad[post_res.grad != post_res.grad] = 0
             optimizer.step()
-        if lr_halfed_count >= 15 or nan_count > 15:
-            break
+
+            if lr_halfed_count >= 15 or nan_count > 15:
+                break
 
 
-    loss_bundle['pred_res'] = combine_pre_post(pred_res, prev_pre_res, prev_post_res)
+    loss_bundle['pred_res'] = combine_pre_post(pred_res, prev_pre_res, prev_post_res).up(opt_res_coarsness)
+
     loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
     loss_dict = opti_loss(loss_bundle, crop=crop)
 

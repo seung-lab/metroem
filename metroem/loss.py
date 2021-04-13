@@ -201,7 +201,6 @@ def get_dataset_loss(model, dataset_loader, loss_fn, mip_in, *args, **kwargs):
 def similarity_score(bundle, weights=None, crop=32):
     tgt = bundle['tgt']
     pred_tgt = bundle['pred_tgt']
-
     mse = ((tgt - pred_tgt)**2)
     if crop > 0:
         mse = mse[..., crop:-crop, crop:-crop]
@@ -306,7 +305,10 @@ def multilevel_metric_loss(levels, mip_in, loss_fn,
                     if 'field' in k or 'res' in k:
                         loss_bundle_emb[k] = loss_bundle_emb[k].from_pixels().down().pixels()
                     elif 'src_' in k or 'tgt_' in k:
-                        loss_bundle_emb[k] = torch.nn.functional.max_pool2d(loss_bundle_emb[k], 2)
+                        if loss_bundle_emb[k].dtype == torch.bool:
+                            loss_bundle_emb[k] = torch.nn.functional.max_pool2d(loss_bundle_emb[k].float(), 2).bool()
+                        else:
+                            loss_bundle_emb[k] = torch.nn.functional.max_pool2d(loss_bundle_emb[k], 2)
             if norm_embeddings:
                 with torch.set_grad_enabled(True):
                     loss_bundle_emb = helpers.normalize_bundle(loss_bundle_emb, per_feature_var=True, mask_fill=0)
