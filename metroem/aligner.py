@@ -101,6 +101,7 @@ def create_model(checkpoint_folder, device='cpu', checkpoint_name="checkpoint"):
 
     return my_p
 
+
 def load_my_state_dict(model, state_dict, delta=0):
     own_state = model.state_dict()
 
@@ -150,7 +151,7 @@ class Aligner(nn.Module):
         self.finetune_sm = finetune_sm
         self.train = train
 
-    def forward(self, src_img, tgt_img, src_agg_field=None, 
+    def forward(self, src_img, tgt_img, src_agg_field=None, tgt_agg_field=None,
             src_folds=None, tgt_folds=None,
             finetune=None,
             finetune_iter=None,
@@ -219,27 +220,32 @@ class Aligner(nn.Module):
                     lr=finetune_lr,
                     num_iter=finetune_iter,
                     sm=finetune_sm)
-
         if return_state:
             return pred_res.field(), self.net.state
         else:
             return pred_res.field()
 
-    def save_checkpoint(self, checkpoint_folder):
+    def get_embeddings(self, img, level=0, preserve_zeros=False):
+        img = img.squeeze()
+        assert len(img.shape) == 2
+        while len(img.shape) < 4:
+            img = img.unsqueeze(0)
+
+        net_input = torch.cat((img, img), 1).float()
+
+        with torch.no_grad():
+            self.net.forward(x=net_input)
+
+        emb = self.net.state['up'][str(level)]['output']
+        img_emb = emb[0, 1:emb.shape[1]//2]
+        if preserve_zeros:
+            mask =  (img == 0).float()
+            while mask.shape[-1] > img_emb.shape[-1]:
+                mask = torch.nn.functional.max_pool2d(mask, 2)
+            mask = mask != 0
+            img_emb[..., mask.squeeze()] = 0
+        return img_emb
+
+    def save_state_dict(self, checkpoint_folder):
         path = os.path.join(checkpoint_folder, f"{self.net.name}.state.pth.tar")
         torch.save(self.net.state_dict(), path)
-
-    def load_checkpoint(self, checkpoint_folder, map_location):
-        """Load from checkpoint
-
-        Args:
-            checkpoint_folder (str): path to checkpoint
-            map_lcation (dict): {'cuda:0' : 'cudaN'}
-        """
-        checkpoint_path = os.path.join(checkpoint_folder,
-                                       f"{self.net.name}.state.pth.tar")
-        if  os.path.isfile(checkpoint_path):
-            load_my_state_dict(self,
-                               torch.load(checkpoint_path,
-                                          map_location=map_location))
-
