@@ -10,8 +10,8 @@ def parse_df(df):
     coord_cols = ['x0','y0','z0']
     exported = c1 in df.columns
     if exported:
-        df[['x0','y0','z0']] = df[c1].str.replace('(','') \
-                                     .str.replace(')','') \
+        df[['x0','y0','z0']] = df[c1].str.replace('(', '', regex=False) \
+                                     .str.replace(')', '', regex=False) \
                                      .str.split(', ', expand=True) \
                                      .astype(int) 
     for coord_col in coord_cols:
