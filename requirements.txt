@@ -3,10 +3,12 @@ numpy
 cloud-volume
 torch
 torchvision
-git+git://https://github.com/supersergiy/modelhouse
+git+https://github.com/supersergiy/modelhouse.git
 #modelhouse
 scikit-image
 artificery
-torchfields
+#torchfields
+git+https://github.com/seung-lab/torchfields.git
 jupyterlab
 ipywidgets
+pandas
