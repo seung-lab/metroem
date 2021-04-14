@@ -241,29 +241,31 @@ class Field():
         field = field / (2**dst_mip)
         return field, offset
 
-def download_sample(bbox, image):
+def download_sample(bbox, image, normalize=True):
     """Download masked image pair to dst
 
     Args:
         bbox (Bbox): MIP0
         image (Image)
+        normalize (bool)
     """
     mip = image.mip
-    sample_image = image.get(bbox, mip)
+    sample_image = image.get(adj_bbox, mip, normalize=normalize)
     return sample_image
 
-def download_sample_with_field(bbox, image, field):
+def download_sample_with_field(bbox, image, field, normalize=True):
     """Download warped and masked image pair to dst
 
     Args:
         bbox (Bbox): MIP0
         image (Image)
         field (Field)
+        normalize (bool)
     """
     mip = image.mip
     sample_field, offset = field.get(bbox, mip)
     adj_bbox = bbox + offset
-    sample_image = image.get(adj_bbox, mip)
+    sample_image = image.get(adj_bbox, mip, normalize=normalize)
     return sample_field, sample_image
 
 def write_to_cloudvolume(vol, data, sample_id):
@@ -283,6 +285,8 @@ def write_to_cloudvolume(vol, data, sample_id):
     if im.is_cuda:
         im = im.cpu()
     im = im.numpy()
+    if vol.data_type == 'uint8':
+        im = im.astype(np.uint8)
     dst_bbox = Bbox(Vec(0,0,sample_id),
                     vol.chunk_size + Vec(0,0,sample_id)) 
     vol[dst_bbox.to_slices()] = im
@@ -308,7 +312,7 @@ def write_to_h5(h5_dset, data, sample_id):
         elif k == 'field':
             h5f[sample_index] = obj
 
-def get_dst_cloudvolume(spec, dst_path, res, parallel=1):
+def get_dst_cloudvolume(spec, dst_path, res, parallel=1, data_type='float32'):
     """Create CloudVolume where result will be written
 
     Args:
@@ -324,7 +328,7 @@ def get_dst_cloudvolume(spec, dst_path, res, parallel=1):
     info = CloudVolume.create_new_info(
                       num_channels = 1,
                       layer_type = 'image',
-                      data_type = 'float32',
+                      data_type = data_type,
                       encoding = 'raw',
                       resolution = res,
                       voxel_offset = [0, 0, 0],
@@ -411,7 +415,7 @@ def get_chunk_size(dst, to_cloudvolume=False):
         dst_shape = dst['image'].shape
         return Vec(dst_shape[-2], dst_shape[-1], 1)
 
-def make_dataset(spec, dst_path, to_cloudvolume=False):
+def make_dataset(spec, dst_path, to_cloudvolume=False, normalize=True):
     """Create CloudVolume containing MetroEM dataset
     
     Dataset will contain warped & masked src,tgt image pairs
@@ -420,6 +424,7 @@ def make_dataset(spec, dst_path, to_cloudvolume=False):
         spec (dict): specification object; see README.md
         dst_path (str): CloudVolume path
         to_cloudvolume (bool)
+        normalize (bool)
     """
     parallel = spec.get('parallel', 1)
     masks = Masks.from_spec(spec['masks'], parallel=parallel) 
@@ -429,10 +434,12 @@ def make_dataset(spec, dst_path, to_cloudvolume=False):
     image = Image.from_spec(spec['image'], masks=masks, parallel=parallel) 
     bbox = spec_to_bbox(spec)
     if to_cloudvolume:
+        data_type = 'float32' if normalize else 'uint8'
         dst = get_dst_cloudvolume(spec=spec, 
                                   dst_path=dst_path,
                                   res=image.vol.mip_resolution(0), 
-                                  parallel=parallel)
+                                  parallel=parallel,
+                                  data_type=data_type)
     else:
         dst = get_h5_dset(spec=spec, dst_path=dst_path)
 
@@ -444,12 +451,14 @@ def make_dataset(spec, dst_path, to_cloudvolume=False):
                          sample_spec['z_start'])
             if field is None:
                 im = download_sample(bbox=bbox+offset,
-                                     image=image)    
+                                     image=image,
+                                     normalize=normalize)
                 data = {'image': im}
             else:
                 f, im = download_sample_with_field(bbox=bbox+offset,
                                         image=image,
-                                        field=field)
+                                        field=field,
+                                        normalize=normalize)
                 data = {'field': f, 'image': im}
                 if not to_cloudvolume:
                     if i % 2 == 1:
@@ -474,6 +483,7 @@ if __name__ == '__main__':
             help='Use local path to create H5 file; \
                     use cloudpath to create new CloudVolume')
     parser.add_argument('--parallel',  type=int, default=1)
+    parser.add_argument('--unnormalize', action='store_true')
 
     args = parser.parse_args()
     with open(args.spec_path, "r") as f:
@@ -489,5 +499,6 @@ if __name__ == '__main__':
 
     make_dataset(spec=spec,
                  dst_path=dst_path,
-                 to_cloudvolume=to_cloudvolume)
+                 to_cloudvolume=to_cloudvolume,
+                 normalize=not args.unnormalize)
 
