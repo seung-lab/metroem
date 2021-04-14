@@ -1,4 +1,84 @@
 {
+   "3": [
+        {
+            "smoothness": 15.0E0,
+            "lr": 3.0E-5,
+            "num_epochs": 100,
+            "loss_spec": {"type": "plain"},
+            "mse_keys_to_apply":{
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ]
+            },
+            "sm_keys_to_apply": {
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "mask_value": 1e-5,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "binarization": {"strat": "neq", "value": 0},
+                     "coarsen_ranges": [[1, 0]],
+                     "mask_value": 0}
+                ]
+            }
+        },
+        {
+            "smoothness": 15.0E0,
+            "lr": 3.0E-5, 
+            "num_epochs": 4000, 
+            "loss_spec": {
+                "type": "metric", 
+                "params": {
+                    "levels": [0],
+                    "pre_align_sample": 32 
+                }
+            },
+            "mse_keys_to_apply":{
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ]
+            },
+            "sm_keys_to_apply": {
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "mask_value": 1e-5,
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "coarsen_ranges": [[1, 0]],
+                     "binarization": {"strat": "neq", "value": 0},
+                     "fm": 0
+                     }
+                ]
+            }
+        }
+    ],
    "4": [
         {
             "smoothness": 15.0E0,

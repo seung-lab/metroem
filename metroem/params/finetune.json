@@ -1,4 +1,49 @@
 {
+   "3": [
+        {
+            "smoothness": 15.0E0,
+            "lr": 1.0E-5, 
+            "num_epochs": 500, 
+            "loss_spec": {
+                "type": "metric", 
+                "params": {
+                    "levels": [0],
+                    "pre_align_sample": 32 
+                }
+            },
+            "mse_keys_to_apply":{
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}
+                     }
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "fm": 0,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ]
+            },
+            "sm_keys_to_apply": {
+                "src": [
+                    {"name": "src",
+                     "fm": 0,
+                     "mask_value": 1e-5,
+                     "coarsen_ranges": [[1, 0.0]],
+                     "binarization": {"strat": "neq", "value": 0}}
+                ],
+                "tgt":[
+                    {"name": "tgt",
+                     "binarization": {"strat": "neq", "value": 0},
+                     "coarsen_ranges": [[1, 0.0]],
+                     "fm": 0
+                     }
+                ]
+            }
+        }
+    ],
    "4": [
         {
             "smoothness": 15.0E0,
