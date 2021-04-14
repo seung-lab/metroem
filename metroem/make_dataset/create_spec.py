@@ -36,6 +36,9 @@ if __name__ == '__main__':
     with open(args.src_spec_path, "r") as f:
             spec = json.load(f)
     max_mip = spec['max_mip']
+    image_mip = spec['image']['src_mip']
+    x_size = (spec['x_size'] // 2) * 2**image_mip
+    y_size = (spec['y_size'] // 2) * 2**image_mip
     df = pd.read_csv(args.points_path, dtype=str)
     df = parse_df(df)
     for _, row in df.iterrows():
@@ -50,8 +53,8 @@ if __name__ == '__main__':
                 pair = []
                 for k in pair_offsets:
                     img = {}
-                    img['x_start'] = adjust_coord(row['x0'], max_mip)
-                    img['y_start'] = adjust_coord(row['y0'], max_mip)
+                    img['x_start'] = adjust_coord(row['x0'], max_mip) - x_size
+                    img['y_start'] = adjust_coord(row['y0'], max_mip) - y_size
                     img['z_start'] = int(row['z0'] + k)
                     pair.append(img)
                 spec['pairs'].append(pair)
