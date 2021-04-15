@@ -62,9 +62,10 @@ class CloudTensor():
         if src_mip != dst_mip:
             scale_factor = 2**(src_mip - dst_mip)
             im = torch.nn.functional.interpolate(im,
-                                                mode='nearest',
+                                                mode='bilinear',
                                                 scale_factor=scale_factor,
-                                                recompute_scale_factor=False)
+                                                recompute_scale_factor=False,
+                                                align_corners=False)
         return im
 
     @property
@@ -178,9 +179,8 @@ class Image():
         im_black = im == 0
         if normalize:
             adj_bbox = self.ref.adjust_bbox(bbox)
-            if self.ref.mip == self.vol.mip:
-                ref_im = im
-            else:
+            ref_im = im
+            if self.ref.mip != dst_mip:
                 ref_im = self.ref.get(adj_bbox)
             ref_masks = self.masks.get(adj_bbox, self.ref.mip)
             ref_im = ref_im[~ref_masks]
@@ -241,28 +241,28 @@ class Field():
         field = field / (2**dst_mip)
         return field, offset
 
-def download_sample(bbox, image, normalize=True):
+def download_sample(bbox, image, mip, normalize=True):
     """Download masked image pair to dst
 
     Args:
         bbox (Bbox): MIP0
         image (Image)
+        mip (int)
         normalize (bool)
     """
-    mip = image.mip
     sample_image = image.get(adj_bbox, mip, normalize=normalize)
     return sample_image
 
-def download_sample_with_field(bbox, image, field, normalize=True):
+def download_sample_with_field(bbox, image, field, mip, normalize=True):
     """Download warped and masked image pair to dst
 
     Args:
         bbox (Bbox): MIP0
         image (Image)
         field (Field)
+        mip (int)
         normalize (bool)
     """
-    mip = image.mip
     sample_field, offset = field.get(bbox, mip)
     adj_bbox = bbox + offset
     sample_image = image.get(adj_bbox, mip, normalize=normalize)
@@ -443,7 +443,6 @@ def make_dataset(spec, dst_path, to_cloudvolume=False, normalize=True):
     else:
         dst = get_h5_dset(spec=spec, dst_path=dst_path)
 
-
     for k, pair in enumerate(spec['pairs']):
         for i, sample_spec in enumerate(pair):
             offset = Vec(sample_spec['x_start'],
@@ -452,12 +451,14 @@ def make_dataset(spec, dst_path, to_cloudvolume=False, normalize=True):
             if field is None:
                 im = download_sample(bbox=bbox+offset,
                                      image=image,
+                                     mip=spec['dst_mip'],
                                      normalize=normalize)
                 data = {'image': im}
             else:
                 f, im = download_sample_with_field(bbox=bbox+offset,
                                         image=image,
                                         field=field,
+                                        mip=spec['dst_mip'],
                                         normalize=normalize)
                 data = {'field': f, 'image': im}
                 if not to_cloudvolume:
