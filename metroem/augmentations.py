@@ -160,7 +160,7 @@ class RandomTranspose(object):
                 if 'field' not in k:
                     bundle[k] = v.transpose(-1, -2)
                 else:
-                    bundle['res'] = bundle['res'].transpose(0, 1).flip(2)
+                    bundle['src_field'] = bundle['src_field'].transpose(2,3).flip(2)
 
         return bundle
 
