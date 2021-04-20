@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="metroem",
-    version="0.0.1",
+    version="0.0.5",
     author="Seung Lab",
     author_email="",
     description="Metric learning optimization pyramid for EM alignment",
@@ -14,6 +14,19 @@ setuptools.setup(
     include_package_data=True,
     package_data={'': ['*.py']},
     install_requires=[
+        'torch',
+        'torchvision',
+        'pathlib',
+        'artificery',
+        'torchfields',
+        'itertools',
+        'h5py',
+        'argparse',
+        'cloud-volume',
+        'tqdm',
+        'scikit-image',
+        'six',
+        'numpy'
     ],
     entry_points={
         "console_scripts": [

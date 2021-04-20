@@ -34,9 +34,9 @@ def write_array(dset, data, sample_index, pair_index):
     """
     dset[sample_index, pair_index] = data
 
-def make_image_dset(dset_path, 
-                  num_samples, 
-                  patch_size, 
+def make_image_dset(dset_path,
+                  num_samples,
+                  patch_size,
                   chunk_size=512,
                   dtype=np.float32):
     """Define H5 file for image data
@@ -46,7 +46,7 @@ def make_image_dset(dset_path,
         num_samples (int)
         patch_size (int): W x H; W==H for each sample
         chunk_size (int): H5 chunking (default: patch_size)
-        dtype (type): datatype of H5 
+        dtype (type): datatype of H5
 
     Returns:
         h5py.File object, sized:
@@ -64,9 +64,9 @@ def make_image_dset(dset_path,
     if data_name in df:
         del df[data_name]
     dset = df.create_dataset(data_name,
-                             dset_shape, 
+                             dset_shape,
                              dtype=dtype,
-                             chunks=chunk_dim, 
+                             chunks=chunk_dim,
                              compression='lzf',
                              scaleoffset=None)
     return dset
@@ -109,12 +109,12 @@ def download_section_image(vol,
                 pair_index=pair_index)
 
 def download_dataset_image(cv_path,
-                        dst_folder, 
-                        z_start, 
+                        dst_folder,
+                        z_start,
                         z_end,
-                        mip, 
-                        x_offset=0, 
-                        y_offset=0, 
+                        mip,
+                        x_offset=0,
+                        y_offset=0,
                         patch_size=None,
                         suffix=None,
                         parallel=1,
@@ -153,16 +153,16 @@ def download_dataset_image(cv_path,
     vol = CloudVolume(cv_path,
                       mip=mip,
                       fill_missing=True,
-                      bounded=False, 
-                      progress=False, 
+                      bounded=False,
+                      progress=False,
                       parallel=parallel)
     defect_mask = None
     if cv_path_defects is not None:
         defect_mask = CloudVolume(cv_path_defects,
                         mip=mip,
                         fill_missing=True,
-                        bounded=False, 
-                        progress=False, 
+                        bounded=False,
+                        progress=False,
                         parallel=parallel)
     for sample_index, z in tqdm(enumerate(section_ids)):
         for pair_index in range(2):
@@ -191,20 +191,20 @@ if __name__ == '__main__':
     parser.add_argument('--x_offset',  type=int, default=0)
     parser.add_argument('--y_offset',  type=int, default=0)
     parser.add_argument(
-            '--z_start', 
-            type=int, 
+            '--z_start',
+            type=int,
             default=None,
             help='Start of source image range (target range start is z_start-1')
     parser.add_argument(
-            '--z_end', 
-            type=int, 
+            '--z_end',
+            type=int,
             default=None,
             help='End of source image range (target range end is z_end-1')
     parser.add_argument('--cv_path', type=str, default=None)
     parser.add_argument('--cv_path_defects', type=str, default=None)
     parser.add_argument('--mask_val', type=float, default=1)
-    parser.add_argument('--field_dset', 
-                        type=str, 
+    parser.add_argument('--field_dset',
+                        type=str,
                         default=None,
                         help='Path to field dset with offsets')
     parser.add_argument('--suffix', type=str, default=None)
@@ -222,12 +222,12 @@ if __name__ == '__main__':
 
     for mip, patch_size in zip(args.mips, args.patch_sizes):
         download_dataset_image(cv_path=args.cv_path,
-                                dst_folder=dst_folder, 
-                                z_start=args.z_start, 
+                                dst_folder=dst_folder,
+                                z_start=args.z_start,
                                 z_end=args.z_end,
-                                mip=mip, 
-                                x_offset=args.x_offset, 
-                                y_offset=args.y_offset, 
+                                mip=mip,
+                                x_offset=args.x_offset,
+                                y_offset=args.y_offset,
                                 patch_size=patch_size,
                                 suffix=args.suffix,
                                 parallel=args.parallel,

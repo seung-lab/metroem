@@ -151,9 +151,9 @@ class MultimipDataset:
                 prev_field_file = self.get_field_file(name=name, mip=prev_mip, stage=stage)
                 if prev_field_file is not None:
                     # self._upsample_field(name=name, stage=stage, mip_start=prev_mip, mip_end=mip)
-                    self._upsample_field_direct(name=name, 
-                                                stage=stage, 
-                                                in_mip=prev_mip, 
+                    self._upsample_field_direct(name=name,
+                                                stage=stage,
+                                                in_mip=prev_mip,
                                                 out_mip=mip)
                     field_file = self.get_field_file(name=name, mip=mip, stage=stage, create=create)
                     break
@@ -170,7 +170,7 @@ class MultimipDataset:
 
             field_shape = (shape[0], 2, shape[-2], shape[-1])
             chunks = (1, 2, shape[-2], shape[-1])
-            field_dset = field_file.create_dataset("main", 
+            field_dset = field_file.create_dataset("main",
                     shape=field_shape,
                     dtype=np.float32,
                     chunks=chunks,
@@ -277,8 +277,8 @@ class MultimipDataset:
         assert(in_mip > out_mip)
         in_field_dset = self.get_field_dset(name=name, stage=stage, mip=in_mip)
         dst_img_dset = self.get_img_dset(name=name, mip=out_mip)
-        out_field_dset = self.load_field_dset(name=name, 
-                                              stage=stage, 
+        out_field_dset = self.load_field_dset(name=name,
+                                              stage=stage,
                                               mip=out_mip,
                                               shape=dst_img_dset.shape,
                                               create=True)
@@ -330,31 +330,31 @@ class MultimipDataset:
         """Get training dataset: all but last two image pairs
         """
         self.load_img_composite_dset(mip)
-        return self.get_alignment_dset(mip=mip, 
+        return self.get_alignment_dset(mip=mip,
                                stage=stage,
                                start_index=0,
                                end_index=len(self.img_composite_dsets[mip])-2,
-                               crop_mode=crop_mode, 
+                               crop_mode=crop_mode,
                                cropped_size=cropped_size)
 
     def get_val_dset(self, mip, stage=None, crop_mode='middle', cropped_size=2048):
         """Get validation dataset: last two images pairs
         """
         self.load_img_composite_dset(mip)
-        return self.get_alignment_dset(mip=mip, 
+        return self.get_alignment_dset(mip=mip,
                                stage=stage,
                                start_index=len(self.img_composite_dsets[mip])-2,
-                               crop_mode=crop_mode, 
+                               crop_mode=crop_mode,
                                cropped_size=cropped_size)
 
 
 class AlignmentDataLoader(torch.utils.data.Dataset):
-    def __init__(self, 
-                img_dset, 
-                field_dset, 
-                start_index, 
+    def __init__(self,
+                img_dset,
+                field_dset,
+                start_index,
                 end_index,
-                crop_mode=None, 
+                crop_mode=None,
                 cropped_size=None):
         self.img_dset = img_dset
         self.field_dset = field_dset

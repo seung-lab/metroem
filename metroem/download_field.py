@@ -26,9 +26,9 @@ def get_dset_path(dst_folder,
     """
     suffix = '_' + suffix if suffix is not None else ''
     dset_name = "field_0_x{}_y{}_z{}_MIP{}{}.h5".format(x_offset,
-                                                        y_offset, 
-                                                        z_start, 
-                                                        mip, 
+                                                        y_offset,
+                                                        z_start,
+                                                        mip,
                                                         suffix)
     return dst_folder / dset_name
 
@@ -46,9 +46,9 @@ def write_tensor(dset, data, sample_index, pair_index):
     data = data.numpy()
     dset[sample_index, pair_index] = data
 
-def make_field_dset(dset_path, 
-                  num_samples, 
-                  patch_size, 
+def make_field_dset(dset_path,
+                  num_samples,
+                  patch_size,
                   chunk_size=512,
                   dtype=np.float32):
     """Define H5 file for data_name
@@ -58,7 +58,7 @@ def make_field_dset(dset_path,
         num_samples (int)
         patch_size (int): W x H; W==H for each sample
         chunk_size (int): H5 chunking (default: patch_size)
-        dtype (type): datatype of H5 
+        dtype (type): datatype of H5
 
     Returns:
         h5py.File object, sized:
@@ -75,25 +75,25 @@ def make_field_dset(dset_path,
     if data_name in df:
         del df[data_name]
     dset = df.create_dataset(data_name,
-                             dset_shape, 
+                             dset_shape,
                              dtype=dtype,
-                             chunks=chunk_dim, 
+                             chunks=chunk_dim,
                              compression='lzf',
                              scaleoffset=scaleoffset)
     return dset
 
-def make_offset_dset(dset_path, 
-                    num_samples, 
+def make_offset_dset(dset_path,
+                    num_samples,
                     dtype=int):
     """Define H5 file for field offsets
 
     Args:
         dset_path (str): H5 filepath
         num_samples (int)
-        dtype (type): datatype of H5 
+        dtype (type): datatype of H5
 
     Returns:
-        h5py.Dataset object, sized: 
+        h5py.Dataset object, sized:
             num_samples x 2 (src, tgt) x 2 (x, y)
     """
     df = h5py.File(dset_path, 'a')
@@ -103,12 +103,12 @@ def make_offset_dset(dset_path,
     dset_shape = (num_samples, 2, 2)
     chunk_dim = (1, 1, 2)
     return df.create_dataset(data_name,
-                             dset_shape, 
+                             dset_shape,
                              dtype=int,
                              chunks=chunk_dim,
                              compression='lzf')
 
-def download_section_field(vol,    
+def download_section_field(vol,
                         dset,
                         offsets,
                         x_offset,
@@ -120,7 +120,7 @@ def download_section_field(vol,
                         pair_index):
     """Download field to H5 file and collect offset adjustments
 
-    The field will not be used to warp the img and defects. Warping is handled 
+    The field will not be used to warp the img and defects. Warping is handled
     in the dataloader.
 
     Field is assumed to be in MIP0 displacements, and converted to
@@ -162,13 +162,13 @@ def download_section_field(vol,
                  pair_index=pair_index)
 
 def download_dataset_field(cv_path,
-                        dst_folder, 
-                        z_start, 
+                        dst_folder,
+                        z_start,
                         z_end,
-                        src_mip, 
+                        src_mip,
                         dst_mip,
-                        x_offset=0, 
-                        y_offset=0, 
+                        x_offset=0,
+                        y_offset=0,
                         patch_size=None,
                         suffix=None,
                         parallel=1):
@@ -202,11 +202,11 @@ def download_dataset_field(cv_path,
     vol = CloudVolume(cv_path,
                       mip=src_mip,
                       fill_missing=True,
-                      bounded=False, 
-                      progress=False, 
+                      bounded=False,
+                      progress=False,
                       parallel=parallel)
-    offsets = make_offset_dset(dset_path=dset_path, 
-                               num_samples=num_samples, 
+    offsets = make_offset_dset(dset_path=dset_path,
+                               num_samples=num_samples,
                                dtype=int)
     x_offset //= 2**src_mip
     y_offset //= 2**src_mip
@@ -233,13 +233,13 @@ if __name__ == '__main__':
     parser.add_argument('--x_offset',    type=int, default=0)
     parser.add_argument('--y_offset',    type=int, default=0)
     parser.add_argument(
-            '--z_start', 
-            type=int, 
+            '--z_start',
+            type=int,
             default=None,
             help='Start of source image range (target range start is z_start-1')
     parser.add_argument(
-            '--z_end', 
-            type=int, 
+            '--z_end',
+            type=int,
             default=None,
             help='End of source image range (target range end is z_end-1')
     parser.add_argument('--cv_path', type=str, default=None)
@@ -257,12 +257,12 @@ if __name__ == '__main__':
 
     download_dataset_field(cv_path=args.cv_path,
                         dst_folder=dst_folder,
-                        z_start=args.z_start, 
+                        z_start=args.z_start,
                         z_end=args.z_end,
-                        src_mip=args.src_mip, 
-                        dst_mip=args.dst_mip, 
-                        x_offset=args.x_offset, 
-                        y_offset=args.y_offset, 
+                        src_mip=args.src_mip,
+                        dst_mip=args.dst_mip,
+                        x_offset=args.x_offset,
+                        y_offset=args.y_offset,
                         patch_size=args.patch_size,
                         suffix=args.suffix,
                         parallel=args.parallel)

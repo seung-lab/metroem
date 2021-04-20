@@ -48,15 +48,15 @@ def setup(rank, world_size):
 def cleanup():
     dist.destroy_process_group()
 
-def train_module(rank, 
+def train_module(rank,
                  world_size,
-                 module_path, 
-                 train_params, 
+                 module_path,
+                 train_params,
                  dataset_path,
                  module_mip,
                  stage,
-                 checkpoint_name, 
-                 aug_params=None):                
+                 checkpoint_name,
+                 aug_params=None):
     """Train object with its own dataset (specific MIP)
 
     Args:
@@ -83,10 +83,10 @@ def train_module(rank,
     dataset = MultimipDataset(dataset_path, aug_params, field_tag=checkpoint_name)
     train_dset = dataset.get_train_dset(mip=module_mip, stage=stage)
     val_dset = dataset.get_val_dset(mip=module_mip, stage=stage)
-    val_data_loader = torch.utils.data.DataLoader(val_dset, 
-                                                  batch_size=1, 
+    val_data_loader = torch.utils.data.DataLoader(val_dset,
+                                                  batch_size=1,
                                                   shuffle=True,
-                                                  num_workers=0, 
+                                                  num_workers=0,
                                                   pin_memory=False)
 
     trainable = []
@@ -111,9 +111,9 @@ def train_module(rank,
         loss_spec = epoch_params["loss_spec"]
         loss_type = epoch_params["loss_spec"]["type"]
 
-        simple_loss = loss.unsupervised_loss(smoothness, 
+        simple_loss = loss.unsupervised_loss(smoothness,
                                              use_defect_mask=True,
-                                             sm_keys_to_apply=sm_keys_to_apply, 
+                                             sm_keys_to_apply=sm_keys_to_apply,
                                              mse_keys_to_apply=mse_keys_to_apply)
         if loss_type == "plain":
             training_loss = simple_loss
@@ -134,35 +134,35 @@ def train_module(rank,
                                 train_dset,
                                 num_replicas=world_size,
                                 rank=rank)
-        train_data_loader = torch.utils.data.DataLoader(train_dset, 
-                                                        batch_size=1, 
+        train_data_loader = torch.utils.data.DataLoader(train_dset,
+                                                        batch_size=1,
                                                         shuffle=False,
-                                                        num_workers=0, 
+                                                        num_workers=0,
                                                         pin_memory=False,
                                                         sampler=train_sampler)
 
         optimizer = torch.optim.Adam(trainable, lr=lr, weight_decay=0)
         aligner_train_loop(rank,
-                           model, 
-                           mip_in=0, 
-                           train_loader=train_data_loader, 
-                           val_loader=val_data_loader, 
+                           model,
+                           mip_in=0,
+                           train_loader=train_data_loader,
+                           val_loader=val_data_loader,
                            optimizer=optimizer,
-                           num_epochs=num_epochs, 
+                           num_epochs=num_epochs,
                            loss_fn=training_loss,
-                           print_every=print_every, 
+                           print_every=print_every,
                            checkpoint_folder=checkpoint_path,
                            augmentor=augmentor)
     cleanup()
     pass
 
 def train_pyramid(world_size,
-                  pyramid_path, 
-                  dataset_path, 
-                  train_stages, 
+                  pyramid_path,
+                  dataset_path,
+                  train_stages,
                   checkpoint_name,
-                  generate_field_stages, 
-                  train_params=None, 
+                  generate_field_stages,
+                  train_params=None,
                   aug_params=None):
     pyramid_path = os.path.expanduser(pyramid_path)
     module_dict = get_pyramid_modules(pyramid_path)
