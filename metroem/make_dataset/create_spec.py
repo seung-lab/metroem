@@ -47,9 +47,9 @@ if __name__ == '__main__':
             if args.permute_pairs:
                 iters = 2
             for j in range(iters):
-                pair_offsets = [0,i]
+                pair_offsets = [1+i,i]
                 if j % 2 == 1:
-                    pair_offsets = [i,0]
+                    pair_offsets = pair_offsets[::-1]
                 pair = []
                 for k in pair_offsets:
                     img = {}
