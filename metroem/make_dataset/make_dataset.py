@@ -102,8 +102,9 @@ class Reference():
         return self.bbox + bbox.minpt
     
     @property
-    def mip(self):
+    def src_mip(self):
         return self.vol.mip
+
 
 class Mask(CloudTensor):
     def __init__(self, spec):
@@ -180,9 +181,9 @@ class Image():
         if normalize:
             adj_bbox = self.ref.adjust_bbox(bbox)
             ref_im = im
-            if self.ref.mip != dst_mip:
+            if self.ref.dst_mip != dst_mip:
                 ref_im = self.ref.get(adj_bbox)
-            ref_masks = self.masks.get(adj_bbox, self.ref.mip)
+            ref_masks = self.masks.get(adj_bbox, self.ref.dst_mip)
             ref_im = ref_im[~ref_masks]
             ref_im = ref_im[ref_im != 0]
             ref_im = ref_im[ref_im == ref_im]
@@ -232,7 +233,7 @@ class Field():
     def get(self, bbox, dst_mip):
         offset_field = self.ref.get(bbox)
         trans = offset_field.mean_finite_vector(keepdim=True)
-        trans = (trans // (2**self.ref.mip)) * 2**self.ref.mip
+        trans = (trans // (2**self.ref.src_mip)) * 2**self.ref.src_mip
         offset = trans.numpy()
         offset = Vec(int(trans[0,1,0,0]), int(trans[0,0,0,0]), 0)
         # adjust output field by translation
@@ -466,6 +467,10 @@ def make_dataset(spec, dst_path, to_cloudvolume=False, normalize=True):
                         del data['field']
                         im = f.from_pixels()(im)
                         data['image'] = im
+
+            if im.sum() != im.sum():
+                print(f'Sample {sample_id} contains NaNs')
+                continue
 
             sample_id = 2*k + i
             print('Writing sample {}'.format(sample_id))
