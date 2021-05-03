@@ -36,7 +36,7 @@ if __name__ == '__main__':
     with open(args.src_spec_path, "r") as f:
             spec = json.load(f)
     max_mip = spec['max_mip']
-    image_mip = spec['image']['src_mip']
+    image_mip = spec['dst_mip']
     x_size = (spec['x_size'] // 2) * 2**image_mip
     y_size = (spec['y_size'] // 2) * 2**image_mip
     df = pd.read_csv(args.points_path, dtype=str)
