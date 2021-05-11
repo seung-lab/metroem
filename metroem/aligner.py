@@ -75,7 +75,7 @@ def finetune_field(src, tgt, pred_res_start, src_defects=None, tgt_defects=None,
     pred_res_opt = optimize_pre_post_ups(src, tgt, pred_res_start,
                                     src_defects=src_defects,
                                     tgt_defects=tgt_defects,
-                                    crop=16, num_iter=num_iter,
+                                    crop=1, num_iter=num_iter,
                                     sm_keys_to_apply=sm_keys_to_apply,
                                     mse_keys_to_apply=mse_keys_to_apply,
                                     sm=sm, lr=lr)
