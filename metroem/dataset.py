@@ -159,7 +159,6 @@ class MultimipDataset:
                     name=name, mip=prev_mip, stage=stage
                 )
                 if prev_field_file is not None:
-                    # self._upsample_field(name=name, stage=stage, mip_start=prev_mip, mip_end=mip)
                     self._upsample_field_direct(
                         name=name, stage=stage, in_mip=prev_mip, out_mip=mip
                     )
@@ -261,38 +260,6 @@ class MultimipDataset:
                 return_state=False,
             )
             field_dset[b] = helpers.get_np(field)
-
-    def _upsample_field(self, name, stage, mip_start, mip_end):
-        for src_mip in range(mip_start, mip_end - 1, -1):
-            tgt_mip = src_mip - 1
-
-            src_field_dset = self.get_field_dset(name=name, stage=stage, mip=src_mip)
-            tgt_img_dset = self.get_img_dset(name=name, mip=tgt_mip)
-            tgt_field_dset = self.load_field_dset(
-                name=name,
-                stage=stage,
-                mip=tgt_mip,
-                shape=tgt_img_dset.shape,
-                create=True,
-            )
-
-            with torch.no_grad():
-                tgt_size = tgt_img_dset.shape[-1]
-
-                for b in range(src_field_dset.shape[0]):
-                    field_data = helpers.to_tensor(src_field_dset[b : b + 1])
-                    field_data_ups = (
-                        torch.nn.functional.interpolate(
-                            field_data,
-                            mode="bilinear",
-                            scale_factor=2.0,
-                            align_corners=False,
-                            recompute_scale_factor=False,
-                        )
-                        * 2.0
-                    )
-                    field_data_ups_cropped = field_data_ups[:, :, :tgt_size, :tgt_size]
-                    tgt_field_dset[b] = helpers.get_np(field_data_ups_cropped[...])
 
     def _upsample_field_direct(self, name, stage, in_mip, out_mip):
         """Upsample a field datset from SRC_MIP to DST_MIP
