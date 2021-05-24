@@ -4,8 +4,8 @@ The scripts in [`download_image.py`](../download_image.py)
 provide a method to download a stretch of data, but 
 sometimes we want a more specific set of sample.
 
-To do this, we create a spec file, which details
-the exact location of each source & target image pair we want
+To do this, we create a spec file, which lists
+the center MIP0 location of each source & target image pair that we want
 to include in our dataset.
 See [`spec_template.json`](spec_template.json) for the 
 spec convention.
@@ -14,14 +14,14 @@ The pairs list uses the following convention:
 "pairs": [
     {
         "src": {
-            "x_start":
-            "y_start":
-            "z_start":
+            "x":
+            "y":
+            "z":
         },
         "tgt": {
-            "x_start":
-            "y_start":
-            "z_start":
+            "x":
+            "y":
+            "z":
         }, 
     },
     ...
