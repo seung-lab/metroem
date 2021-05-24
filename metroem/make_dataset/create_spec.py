@@ -53,9 +53,9 @@ if __name__ == "__main__":
                 pair = []
                 for k in pair_offsets:
                     img = {}
-                    img["x_start"] = adjust_coord(row["x0"], max_mip)
-                    img["y_start"] = adjust_coord(row["y0"], max_mip)
-                    img["z_start"] = int(row["z0"] + k)
+                    img["x"] = adjust_coord(row["x0"], max_mip)
+                    img["y"] = adjust_coord(row["y0"], max_mip)
+                    img["z"] = int(row["z0"] + k)
                     pair.append(img)
                 spec["pairs"].append(pair)
 

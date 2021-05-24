@@ -378,9 +378,9 @@ def get_h5_path(spec, dst_path, prefix, suffix):
     sample = spec["pairs"][0][0]  # first sample
     dset_name = "{}x{}_y{}_z{}_MIP{}{}.h5".format(
         prefix,
-        sample["x_start"],
-        sample["y_start"],
-        sample["z_start"],
+        sample["x"],
+        sample["y"],
+        sample["z"],
         spec["dst_mip"],
         suffix,
     )
