@@ -279,7 +279,7 @@ class MultimipDataset:
         # scale_factor = 2**(in_mip - out_mip)
 
         with torch.no_grad():
-            dst_size = dst_img_dset.shape[-1]
+            hsz = (in_field_dset.shape[-1] - dst_img_dset.shape[-1]) // 2
             for n in range(in_field_dset.shape[0]):
                 in_field = helpers.to_tensor(in_field_dset[n : n + 1]).field()
                 in_field = in_field * (2 ** in_mip)
@@ -291,7 +291,7 @@ class MultimipDataset:
                 #                                  align_corners=False,
                 #                                  recompute_scale_factor=False
                 #                                  ) * scale_factor
-                out_field_cropped = out_field[0, :, :dst_size, :dst_size]
+                out_field_cropped = out_field[0, :, hsz:-hsz, hsz:-hsz]
                 out_field_dset[n] = helpers.get_np(out_field_cropped[...])
 
     def get_alignment_dset(
