@@ -48,13 +48,14 @@ class MultimipDataset:
     may produce different fields as intermediaries between modules.
     """
 
-    def __init__(self, path, aug_params=None, field_tag=None):
+    def __init__(self, path, aug_params=None, field_tag=None, device="cuda"):
         self.path = path
         self.aug_params = aug_params
         self.data_piece_registry = {}
         self.min_mip = 9
         self.max_mip = 0
         self.names = set()
+        self.device = device
 
         if field_tag is None:
             self.field_tag = ""
@@ -327,11 +328,11 @@ class MultimipDataset:
             end_index=end_index,
             crop_mode=crop_mode,
             cropped_size=cropped_size,
+            device=self.device,
         )
 
     def get_train_dset(self, mip, stage=None, crop_mode="random", cropped_size=1024):
-        """Get training dataset: all but last two image pairs
-        """
+        """Get training dataset: all but last two image pairs"""
         self.load_img_composite_dset(mip)
         return self.get_alignment_dset(
             mip=mip,
@@ -343,8 +344,7 @@ class MultimipDataset:
         )
 
     def get_val_dset(self, mip, stage=None, crop_mode="middle", cropped_size=2048):
-        """Get validation dataset: last two images pairs
-        """
+        """Get validation dataset: last two images pairs"""
         self.load_img_composite_dset(mip)
         return self.get_alignment_dset(
             mip=mip,
@@ -364,6 +364,7 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         end_index,
         crop_mode=None,
         cropped_size=None,
+        device="cuda",
     ):
         self.img_dset = img_dset
         self.field_dset = field_dset
@@ -377,6 +378,7 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         self.shape = self.img_dset[0].shape
         self.crop_mode = crop_mode
         self.cropped_size = cropped_size
+        self.device = device
 
     def __len__(self):
         return self.end_index - self.start_index
@@ -409,15 +411,16 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
         y_slice = slice(y_bot, y_top)
 
         img = self.img_dset[self.start_index + i]
-        src = helpers.to_tensor(img[0, x_slice, y_slice])
-        tgt = helpers.to_tensor(img[1, x_slice, y_slice])
+        src = helpers.to_tensor(img[0, x_slice, y_slice], device=self.device)
+        tgt = helpers.to_tensor(img[1, x_slice, y_slice], device=self.device)
         src[src < -4] = 0
         tgt[tgt < -4] = 0
 
         field = None
         if self.field_dset is not None:
             full_field = self.field_dset[self.start_index + i]
-            field = helpers.to_tensor(full_field[..., x_bot:x_top, y_bot:y_top])
+            field = full_field[..., x_bot:x_top, y_bot:y_top]
+            field = helpers.to_tensor(field, device=self.device)
 
         bundle = {
             "src": src,
@@ -464,4 +467,3 @@ def get_center_crop_coords(full_shape, cropped_size):
         y_top = y_bot + cropped_size
 
     return x_bot, x_top, y_bot, y_top
-
