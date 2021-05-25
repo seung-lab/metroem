@@ -100,7 +100,7 @@ readme-renderer==29.0
 requests==2.25.1
 requests-toolbelt==0.9.1
 rfc3986==1.4.0
-rsa==4.6
+rsa==4.7
 s3transfer==0.3.4
 scalenet==0.0.8
 scikit-image==0.18.1
