@@ -110,7 +110,7 @@ def prepare_for_show(img):
 
 rand_cmap = matplotlib.colors.ListedColormap(np.random.rand(256*32,3))
 
-def display_image(img, x_coords=None, y_coords=None, normalize=False, figsize=(10, 10), mask=False, segmentation=False):
+def display_image(img, x_coords=None, y_coords=None, normalize=False, figsize=(10, 10), mask=False, segmentation=False, vmin=-1.5, vmax=1.5):
     if normalize and mask:
         raise Exception("Masks can't be normalized")
     img = prepare_for_show(img)
@@ -134,7 +134,7 @@ def display_image(img, x_coords=None, y_coords=None, normalize=False, figsize=(1
         
         plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]].astype(np.int32), cmap=cmap)
     elif not normalize:
-        plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray', vmin=-1.5, vmax=1.5)
+        plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray', vmin=vmin, vmax=vmax)
     else:
         plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray')
 
