@@ -80,8 +80,8 @@ def generate_shard(rank,
     model = modelhouse.load_model_simple(module_path,
                                          finetune=True,
                                          finetune_lr=3e-1, 
-                                         finetune_sm=30e0, 
-                                         finetune_iter=400,
+                                         finetune_sm=300e0, 
+                                         finetune_iter=200,
                                          pass_field=True,
                                          checkpoint_name=checkpoint_name)
     checkpoint_path = os.path.join(module_path, "model")
@@ -130,14 +130,15 @@ def generate_shard(rank,
                       train=False,
                       return_state=False)
         field_shape = field.shape
-        src_field_dset[:, :, b, :] = helpers.get_np(field.permute(2,3,0,1))
+        hsz = (src_field_dset.shape[0] * 2**(src_mip-dst_mip) - dst_field_dset.shape[0]) // 2
+        src_field_dset[:, :, b - n_start, :] = helpers.get_np(field.permute(2,3,0,1))
         # upsample
         field = field * (2**src_mip)
         field = field.up(mips=src_mip - dst_mip)
         field = field / (2**dst_mip)
-        field_cropped = field[:, :, :field_shape[-2], :field_shape[-1]]
+        field_cropped = field[:, :, hsz:-hsz, hsz:-hsz]
         field_cropped = field_cropped.permute(2,3,0,1)
-        dst_field_dset[:, :, b, :] = helpers.get_np(field_cropped)
+        dst_field_dset[:, :, b - n_start, :] = helpers.get_np(field_cropped)
 
 
     cleanup()
