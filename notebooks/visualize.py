@@ -730,7 +730,7 @@ class DatasetVisualizer(PyramidVisualizer):
             if 'src_field' in viz_sample:
                 src_res_var = viz_sample['src_field'].field()
             else:
-                src_res_var = torch.zeros_like(run_pred_res_var).field()
+                src_res_var = torch.zeros((2, *viz_src_var.shape[-2:])).field()
                 
             viz_warped_src_var = src_res_var.from_pixels()(viz_src_var)
             
