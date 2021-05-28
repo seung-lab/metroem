@@ -105,8 +105,9 @@ class Reference:
         return self.vol.get(self.adjust_bbox(bbox), dst_mip=self.dst_mip)
 
     def adjust_bbox(self, bbox):
-        """Use input bbox minpt to create ref bbox of fixed size."""
-        return self.bbox + bbox.minpt
+        """Center reference bbox of fixed size at the center of input bbox."""
+        ctr = bbox.minpt + (bbox.size() // Vec(2,2,1))
+        return self.bbox + (ctr - self.bbox.size() // Vec(2,2,1))
 
     @property
     def src_mip(self):
