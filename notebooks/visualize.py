@@ -542,8 +542,8 @@ class PyramidVisualizer(object):
         elif choice in self.vect_dict:
             vecs = prepare_for_show(self.vect_dict[choice])
 
-            x_section_size = vecs.shape[0] // section_count
-            y_section_size = vecs.shape[1] // section_count
+            x_section_size = vecs.shape[1] // section_count
+            y_section_size = vecs.shape[2] // section_count
             
             x_coords = (x_section_size * x_section, x_section_size * (x_section + 1))
             y_coords = (y_section_size * y_section, y_section_size * (y_section + 1))
