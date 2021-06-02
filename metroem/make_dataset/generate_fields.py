@@ -11,12 +11,16 @@ import h5py
 import modelhouse
 import numpy as np
 import torch
+import torchfields
 
 from metroem import helpers
 
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
+
+from cloudvolume import CloudVolume
+from cloudvolume.lib import Vec
 
 from pdb import set_trace as st
 
@@ -54,7 +58,9 @@ def generate_shard(rank,
                  checkpoint_name,
                  img_path,
                  prev_field_path,
-                 temp_dir):
+                 dst_dir,
+                 src_mip,
+                 dst_mip):
     """Generate field for subset of image pairs associated with rank
 
     Args:
@@ -64,7 +70,9 @@ def generate_shard(rank,
         checkpoint_name (str): checkpoint for weights
         img_path (str): path to image pairs h5
         prev_field_path (str): path to previous fields h5
-        temp_dir (str): path where temporary field h5s will be stored
+        dst_dir (str): path where temporary field h5s will be stored
+        src_mip (int)
+        dst_mip (int)
     """
     print(f"Running DDP on rank {rank}.")
     setup(rank, world_size)
@@ -72,7 +80,7 @@ def generate_shard(rank,
     model = modelhouse.load_model_simple(module_path,
                                          finetune=True,
                                          finetune_lr=3e-1, 
-                                         finetune_sm=60e0, 
+                                         finetune_sm=300e0, 
                                          finetune_iter=200,
                                          pass_field=True,
                                          checkpoint_name=checkpoint_name)
@@ -82,20 +90,30 @@ def generate_shard(rank,
 
     img_dset = h5py.File(img_path, 'r')['main']
     prev_field_dset = h5py.File(prev_field_path, 'r')['main']
+    assert(img_dset.shape[0] >= world_size)
     n = img_dset.shape[0] // world_size
     n_start = rank * n
     n_stop = min(n_start + n, img_dset.shape[0])
-    tmp_filepath = os.path.join(temp_dir, '{}_{}.h5'.format(n_start, n_stop))
-    field = h5py.File(tmp_filepath, 'w')
-    field_shape = (n, 2, img_dset.shape[-2], img_dset.shape[-1])
-    chunks = (1, 2, img_dset.shape[-2], img_dset.shape[-1])
-    field_dset = field.create_dataset("main", 
-                                           shape=field_shape,
-                                           dtype=np.float32,
-                                           chunks=chunks,
-                                           compression='lzf',
-                                           scaleoffset=2
-                                           )
+    if rank+1 == world_size:
+        n_stop = img_dset.shape[0]
+    src_mip_filepath = os.path.join(dst_dir, 
+                                '{}'.format(src_mip))
+    dst_mip_filepath = os.path.join(dst_dir, 
+                                '{}'.format(dst_mip))
+    src_field_dset = CloudVolume(src_mip_filepath, mip=0)
+    dst_field_dset = CloudVolume(dst_mip_filepath, mip=0)
+    # src_field_dset = src_field.create_dataset("main", 
+    #                                        shape=field_shape,
+    #                                        dtype=np.float32,
+    #                                        chunks=chunks,
+    #                                        compression='lzf',
+    #                                        scaleoffset=2)
+    # dst_field_dset = dst_field.create_dataset("main", 
+    #                                        shape=field_shape,
+    #                                        dtype=np.float32,
+    #                                        chunks=chunks,
+    #                                        compression='lzf',
+    #                                        scaleoffset=2)
 
     for b in range(n_start, n_stop):
         print('{} / {}'.format(img_dset.shape[0], b))
@@ -111,7 +129,17 @@ def generate_shard(rank,
                       src_agg_field=prev_field, 
                       train=False,
                       return_state=False)
-        field_dset[b-n_start] = helpers.get_np(field)
+        field_shape = field.shape
+        hsz = (src_field_dset.shape[0] * 2**(src_mip-dst_mip) - dst_field_dset.shape[0]) // 2
+        src_field_dset[:, :, b - n_start, :] = helpers.get_np(field.permute(2,3,0,1))
+        # upsample
+        field = field * (2**src_mip)
+        field = field.up(mips=src_mip - dst_mip)
+        field = field / (2**dst_mip)
+        field_cropped = field[:, :, hsz:-hsz, hsz:-hsz]
+        field_cropped = field_cropped.permute(2,3,0,1)
+        dst_field_dset[:, :, b - n_start, :] = helpers.get_np(field_cropped)
+
 
     cleanup()
     pass
@@ -122,7 +150,9 @@ def generate_shards_distributed(world_size,
                   checkpoint_name,
                   img_path,
                   prev_field_path,
-                  temp_dir):
+                  dst_dir,
+                  src_mip,
+                  dst_mip):
     pyramid_path = os.path.expanduser(pyramid_path)
     module_dict = get_pyramid_modules(pyramid_path)
     module_path = module_dict[stage]["path"]
@@ -133,7 +163,9 @@ def generate_shards_distributed(world_size,
                    checkpoint_name,
                    img_path,
                    prev_field_path,
-                   temp_dir),
+                   dst_dir,
+                   src_mip,
+                   dst_mip),
              nprocs=world_size,
              join=True)
 
@@ -146,9 +178,12 @@ def main():
     parser.add_argument('--image_path', type=str)
     parser.add_argument('--prev_field_path', type=str)
     # parser.add_argument('--field_path', type=str)
-    parser.add_argument('--temp_dir', type=str)
+    parser.add_argument('--dst_dir', type=str)
     parser.add_argument('--gpu', type=str, default="0")
     parser.add_argument('--stage', type=int)
+    parser.add_argument('--src_mip', type=int, help='MIP of input')
+    parser.add_argument('--dst_mip', type=int, help='MIP of output')
+    parser.add_argument('--save_intermediary', action='store_true')
     parser.add_argument('--port', type=int, default=8888)
 
     parser.set_defaults(redirect_stdout=True)
@@ -157,8 +192,6 @@ def main():
     assert(os.path.exists(args.pyramid_path))
     assert(os.path.exists(args.image_path))
     assert(os.path.exists(args.prev_field_path))
-    os.mkdir(args.temp_dir)
-
     world_size = len(args.gpu.split(','))
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
@@ -166,14 +199,41 @@ def main():
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = str(args.port)
 
+    img_dset = h5py.File(args.image_path, 'r')['main']
+    down_res = Vec(2**args.src_mip, 2**args.src_mip, 1)
+    up_res = Vec(2**args.dst_mip, 2**args.dst_mip, 1)
+    for mip in [args.src_mip, args.dst_mip]:
+        res = Vec(2**mip, 2**mip, 1)
+        path = os.path.join(args.dst_dir, str(mip))
+        info = CloudVolume.create_new_info(
+                        num_channels = 2,
+                        layer_type = 'image',
+                        data_type = 'float32',
+                        encoding = 'raw',
+                        resolution = res,
+                        voxel_offset = [0, 0, 0],
+                        chunk_size = [img_dset.shape[-1],
+                                      img_dset.shape[-2],
+                                      1],
+                        volume_size = [img_dset.shape[-1],
+                                       img_dset.shape[-2],
+                                       img_dset.shape[0]])
+        cv = CloudVolume(path, 
+                        mip=0,
+                        info=info,
+                        cdn_cache=False)
+        cv.commit_info()
+
     generate_shards_distributed(world_size=world_size,
                   pyramid_path=args.pyramid_path,
                   stage=args.stage,
                   checkpoint_name=args.checkpoint_name,
                   img_path=args.image_path,
                   prev_field_path=args.prev_field_path,
-                  temp_dir=args.temp_dir)
-    # gather_shards(temp_dir=args.temp_dir,
+                  dst_dir=args.dst_dir,
+                  src_mip=args.src_mip,
+                  dst_mip=args.dst_mip)
+    # gather_shards(dst_dir=args.dst_dir,
     #               dst_path=args.field_path)
 
 

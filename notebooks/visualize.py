@@ -14,8 +14,8 @@ from scipy import ndimage
 import copy
 import os
 from IPython.display import Image, display
-from IPython.html.widgets import interact, fixed
-from IPython.html import widgets
+from ipywidgets import interact, fixed
+import ipywidgets as widgets
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 
@@ -137,6 +137,7 @@ def display_image(img, x_coords=None, y_coords=None, normalize=False, figsize=(1
         plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray', vmin=vmin, vmax=vmax)
     else:
         plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray')
+    plt.show()
 
         
 def precompute_state(self, img_id, sup, val, state_file):
@@ -283,8 +284,8 @@ def get_aligner(checkpoint_folder,
                             finetune_iter=finetune_iter,
                             finetune=finetune)
 
-def get_dataset(data_dir, dataset_mip, stage, checkpoint_name, crop_mode=None):
-    big_data = dataset.MultimipDataset(data_dir, field_tag=checkpoint_name)
+def get_dataset(data_dir, dataset_mip, stage, checkpoint_name, crop_mode=None, device='cuda'):
+    big_data = dataset.MultimipDataset(data_dir, field_tag=checkpoint_name, device=device)
     return big_data.get_train_dset(mip=dataset_mip,
                                     stage=stage,
                                     crop_mode=None,
@@ -521,8 +522,7 @@ class PyramidVisualizer(object):
         self.vect_dict = {}
        
     def loadimg(self, val, sup, section_count, img_id, x_section, y_section, choice, state_file):
-        self.update_state(img_id, sup, val, state_file)
-        
+        self.update_state(img_id, sup, val, state_file)        
         if choice in self.img_dict:
             normalize = ('norm' in self.img_dict[choice]) and (self.img_dict[choice]['norm'])
             is_mask = ('Mask ' in choice) or (' Mask' in choice)
@@ -542,8 +542,8 @@ class PyramidVisualizer(object):
         elif choice in self.vect_dict:
             vecs = prepare_for_show(self.vect_dict[choice])
 
-            x_section_size = vecs.shape[0] // section_count
-            y_section_size = vecs.shape[1] // section_count
+            x_section_size = vecs.shape[1] // section_count
+            y_section_size = vecs.shape[2] // section_count
             
             x_coords = (x_section_size * x_section, x_section_size * (x_section + 1))
             y_coords = (y_section_size * y_section, y_section_size * (y_section + 1))
@@ -634,7 +634,7 @@ class simple_visualizer():
     
     def loadimg(self, choice, section_count, x_section, y_section):
         i = self.names.index(choice)
-        if isinstance(self.images[i], torch.Tensor):
+        if isinstance(self.images[choice], torch.Tensor):
             self.images[i] = self.images[i].cpu().detach().numpy()
         self.images[i].squeeze()
         img = self.images[i].squeeze()
@@ -683,6 +683,125 @@ class simple_visualizer():
                  x_section=self.x_section_selector, y_section=self.y_section_selector)
 
 
+class DatasetVisualizer(PyramidVisualizer):
+    def __init__(self, dataset_mip, dataset):
+        super().__init__(None, dataset_mip, dataset)
+
+    def compute_state(self, img_id):
+        self.dataset = self.sup_train_dataset        
+
+        if img_id != self.prev_id:
+            self.prev_id = img_id
+            
+            raw_sample = copy.deepcopy(self.dataset[img_id])
+           
+            for aug in self.prerun_augment:
+                if aug['type'] == 'contrast_half_src':
+                    src = raw_sample[0, 0]
+                    src[src.shape[0]//2:, :] *= aug['mult']
+                elif aug['type'] == 'brightness_half_src':
+                    src = raw_sample[0, 0]
+                    src[src.shape[0]//2:, :] += aug['bump']
+                else:
+                    raise Exception("Unknown prerun transofm")
+                    
+            for k, v in six.iteritems(raw_sample):
+                #print (v.shape)
+                # why are we doing this
+                raw_sample[k] = v.unsqueeze(0)  
+                
+            run_sample = copy.deepcopy(raw_sample)
+            self.run_sample = run_sample            
+            model_run_params = {"level_in": self.run_mip}
+            
+            '''run_result = self.pyramid.run_pair(run_sample.unsqueeze(0), self.run_mip, reverse=self.reverse)
+            run_src_var, run_tgt_var, run_true_res_var, run_pred_res_var, run_pred_tgt_var, run_masks_var = run_result
+            
+            del run_result, run_true_res_var, run_pred_tgt_var, run_masks_var'''
+            
+            #clean_smale = self.dataset[img_id][:, 2:-30, 2:-30].unsqueeze(0)
+            viz_sample = copy.deepcopy(raw_sample)
+                    
+            viz_src_var = viz_sample['src']
+            viz_tgt_var = viz_sample['tgt']
+            viz_src_var = viz_src_var
+            viz_tgt_var = viz_tgt_var            
+            
+            if 'src_field' in viz_sample:
+                src_res_var = viz_sample['src_field'].field()
+            else:
+                src_res_var = torch.zeros((2, *viz_src_var.shape[-2:])).field()
+                
+            viz_warped_src_var = src_res_var.from_pixels()(viz_src_var)
+            
+            self.viz_sample = viz_sample
+            # Todo: visualize different penalties
+ 
+            self.img_dict = {
+                'Source': {"img": get_np(viz_src_var), "norm": self.def_norm_img},
+                'Warped Source': {"img": get_np(viz_warped_src_var), "norm": self.def_norm_img},
+                'Target': {"img": get_np(viz_tgt_var), "norm": self.def_norm_img},
+            }
+
+            self.vect_dict = {
+                'Source Residual': get_np(src_res_var),
+            }
+            
+            self.hist_dict = {}
+    
+    def loadimg(self, section_count, img_id, x_section, y_section, choice):
+        self.compute_state(img_id)        
+        if choice in self.img_dict:
+            normalize = ('norm' in self.img_dict[choice]) and (self.img_dict[choice]['norm'])
+            img = copy.copy(prepare_for_show(self.img_dict[choice]['img']))
+            
+            x_section_size = img.shape[0] // section_count
+            y_section_size = img.shape[1] // section_count
+            
+            x_coords = (x_section_size * x_section, x_section_size * (x_section + 1))
+            y_coords = (y_section_size * y_section, y_section_size * (y_section + 1))
+            display_image(img, mask=False, segmentation=False, normalize=normalize, x_coords=x_coords, y_coords=y_coords)
+
+            
+    def visualize(self, section_count=1, state_file=None, default_slice=9, default_x=0, default_y=0):
+        
+        self.id_selector = widgets.IntText(
+            value=default_slice,
+            description='Sample ID:',
+            disabled=False
+        )
+        
+        self.section_count_selector = widgets.IntText(
+            value=section_count,
+            description='Section Count:',
+            disabled=False
+        )
+
+        self.x_section_selector = widgets.IntText(
+            value=default_x,
+            description='X section:',
+            disabled=False
+        )
+        self.y_section_selector = widgets.IntText(
+            value=default_y,
+            description='Y section:',
+            disabled=False
+        )
+        
+        buttons = ['Source', 'Warped Source', 'Target']
+
+        self.button_choice_1 = widgets.ToggleButtons(
+            options=buttons,
+            description='Choice:',
+            disabled=False,
+            button_style='',
+        #     icons=['check'] * 3
+        )
+        interact(self.loadimg, img_id=self.id_selector,
+                 section_count=self.section_count_selector, x_section=self.x_section_selector, y_section=self.y_section_selector, 
+                 choice=self.button_choice_1)
+    
+        
 
 ### 2nd cell ###
 # import artificery
