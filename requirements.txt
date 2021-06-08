@@ -74,7 +74,7 @@ orjson==3.5.0
 packaging==20.9
 pathos==0.2.7
 pbr==5.5.1
-Pillow==8.1.1
+Pillow==8.2.0
 pkginfo==1.7.0
 pluggy==0.13.1
 posix-ipc==1.0.5
