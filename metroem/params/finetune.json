@@ -8,7 +8,8 @@
                 "type": "metric", 
                 "params": {
                     "levels": [0],
-                    "pre_align_sample": 32 
+                    "pre_align_sample": 32,
+		    "pre_align_weight": 0.7
                 }
             },
             "mse_keys_to_apply":{
@@ -53,7 +54,8 @@
                 "type": "metric", 
                 "params": {
                     "levels": [0],
-                    "pre_align_sample": 32 
+                    "pre_align_sample": 32,
+		    "pre_align_weight": 0.7
                 }
             },
             "mse_keys_to_apply":{
@@ -98,7 +100,8 @@
                 "type": "metric", 
                 "params": {
                     "levels": [0],
-                    "pre_align_sample": 32 
+                    "pre_align_sample": 32,
+		    "pre_align_weight": 0.8
                 }
             },
             "mse_keys_to_apply":{
@@ -144,7 +147,8 @@
                 "type": "metric", 
                 "params": {
                     "levels": [0],
-                    "pre_align_sample": 32 
+                    "pre_align_sample": 32,
+		    "pre_align_weight": 0.9
                 }
             },
             "mse_keys_to_apply":{
@@ -197,7 +201,8 @@
                 "type": "metric", 
                 "params": {
                     "levels": [0],
-                    "pre_align_sample": 16 
+                    "pre_align_sample": 16,
+		    "pre_align_weight": 0.9
                 }
             },
             "mse_keys_to_apply":{
