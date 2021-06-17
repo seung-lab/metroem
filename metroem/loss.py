@@ -276,7 +276,7 @@ def similarity_sampling_loss(sample_size, unsup_loss, sample_coverage=0.001, min
 
 def multilevel_metric_loss(levels, mip_in, loss_fn,
         norm_embeddings=True, sm_div=False, train_thru=True,
-        pre_align_sample=None, pure_emb=False):
+        pre_align_sample=None, pure_emb=False, pre_align_weight=0.7):
 
     def compute_loss(loss_bundle, crop=32):
         loss_dict = defaultdict(lambda : 0)
@@ -329,7 +329,7 @@ def multilevel_metric_loss(levels, mip_in, loss_fn,
             else:
                 pre_align_loss =  pre_align_loss_fn(loss_bundle_emb)['similarity']
 
-            loss_dict['result'] = loss_dict['result'] - 0.9 * pre_align_loss / len(levels)
+            loss_dict['result'] = loss_dict['result'] -  pre_align_weight * pre_align_loss / len(levels)
 
             if sm_div:
                 sm_mult = 1.0 / 2**(l - mip_in)
