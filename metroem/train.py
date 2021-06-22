@@ -123,6 +123,9 @@ def train_module(rank,
                     mip_in=0,
                     **loss_spec['params']
                     )
+        else:
+            raise Exception('Bad loss type')
+
 
         augmentor = None
         if "augmentations" in epoch_params:
@@ -177,6 +180,7 @@ def train_pyramid(world_size,
         if train_stages is None or stage in train_stages:
             print (f"Training module {stage}...")
             mip_train_params = train_params[str(module_mip)]
+            '''
             mp.spawn(train_module,
                      args=(world_size,
                            module_path,
@@ -187,7 +191,7 @@ def train_pyramid(world_size,
                            checkpoint_name, # checkpoint_name
                            None), # aug_params
                      nprocs=world_size,
-                     join=True)
+                     join=True)'''
            #  train_module(model, train_params=mip_train_params,
            #          train_dset=dataset.get_train_dset(mip=module_mip, stage=stage),
            #          val_dset=dataset.get_val_dset(mip=module_mip, stage=stage),
@@ -212,7 +216,7 @@ def main():
     parser.add_argument('--pyramid_path', type=str)
     parser.add_argument('--dataset_path', type=str)
     parser.add_argument('--checkpoint_name', type=str, default="checkpoint")
-    parser.add_argument('--train_mode', choices=['scratch', 'finetune'], type=str.lower, default='scratch')
+    parser.add_argument('--train_mode', choices=['scratch', 'finetune', 'custom'], type=str.lower, default='scratch')
     parser.add_argument('--train_params_path', type=str, default=None)
     parser.add_argument('--gpu', type=str, default="0")
     parser.add_argument('--train_stages', type=int, default=None, nargs='+')

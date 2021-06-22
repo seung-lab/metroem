@@ -276,7 +276,7 @@ def similarity_sampling_loss(sample_size, unsup_loss, sample_coverage=0.001, min
 
 def multilevel_metric_loss(levels, mip_in, loss_fn,
         norm_embeddings=True, sm_div=False, train_thru=True,
-        pre_align_sample=None):
+        pre_align_sample=None, pure_emb=False):
 
     def compute_loss(loss_bundle, crop=32):
         loss_dict = defaultdict(lambda : 0)
@@ -309,6 +309,7 @@ def multilevel_metric_loss(levels, mip_in, loss_fn,
                             loss_bundle_emb[k] = torch.nn.functional.max_pool2d(loss_bundle_emb[k].float(), 2).bool()
                         else:
                             loss_bundle_emb[k] = torch.nn.functional.max_pool2d(loss_bundle_emb[k], 2)
+
             if norm_embeddings:
                 with torch.set_grad_enabled(True):
                     loss_bundle_emb = helpers.normalize_bundle(loss_bundle_emb, per_feature_var=True, mask_fill=0)
@@ -318,8 +319,16 @@ def multilevel_metric_loss(levels, mip_in, loss_fn,
             #    loss_bundle_emb['pred_tgt'] = \
             #            loss_bundle_emb['src_field'].field().from_pixels()(loss_bundle_emb['src'])
 
+            if pure_emb:
+                auger = metroem.augmentations.RandomWarp(difficulty=2, max_disp=50, min_disp=-50)
+                aug_loss_bundle_emb = auger(copy.deepcopy(loss_bundle_emb))
+                pre_align_loss =  pre_align_loss_fn(loss_bundle_emb)['similarity']
+                print ('1', pre_align_loss)
+                pre_align_loss =  pre_align_loss_fn(aug_loss_bundle_emb)['similarity']
+                print ('2', pre_align_loss)
+            else:
+                pre_align_loss =  pre_align_loss_fn(loss_bundle_emb)['similarity']
 
-            pre_align_loss =  pre_align_loss_fn(loss_bundle_emb)['similarity']
             loss_dict['result'] = loss_dict['result'] - 0.9 * pre_align_loss / len(levels)
 
             if sm_div:
