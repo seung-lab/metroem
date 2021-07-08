@@ -130,9 +130,9 @@ def rigidity_score(field_delta, tgt_length, power=2):
 def pix_identity(size, batch=1, device='cuda'):
     result = torch.zeros((batch, size, size, 2), device=device)
     x = torch.arange(size, device=device)
-    result[:, :, :, 1] = x
-    result = torch.transpose(result, 1, 2)
     result[:, :, :, 0] = x
+    result = torch.transpose(result, 1, 2)
+    result[:, :, :, 1] = x
     result = torch.transpose(result, 1, 2)
     return result
 
