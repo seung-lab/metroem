@@ -89,7 +89,7 @@ def aligner_train_loop(rank,
             running_loss += loss_var.cpu().detach().numpy()
             if loss_var is None or loss_var != loss_var or \
                     loss_var > 1E3:
-                print ("Bad loss", loss_var)
+                print (f"Bad loss for sample #{bundle['id']}: {loss_var}")
                 import pdb; pdb.set_trace()
                 continue
 
