@@ -169,9 +169,10 @@ def train_pyramid(world_size,
                   aug_params=None):
     pyramid_path = os.path.expanduser(pyramid_path)
     module_dict = get_pyramid_modules(pyramid_path)
-    print (f"Loading dataset {dataset_path}...")
 
     prev_mip = None
+    print (module_dict)
+    import pdb; pdb.set_trace()
     for stage in sorted(module_dict.keys()):
         module_mip = module_dict[stage]["mip_in"]
         module_path = module_dict[stage]["path"]
@@ -180,8 +181,7 @@ def train_pyramid(world_size,
         if train_stages is None or stage in train_stages:
             print (f"Training module {stage}...")
             mip_train_params = train_params[str(module_mip)]
-            '''
-            mp.spawn(train_module,
+            '''mp.spawn(train_module,
                      args=(world_size,
                            module_path,
                            mip_train_params, # train_params
@@ -192,10 +192,10 @@ def train_pyramid(world_size,
                            None), # aug_params
                      nprocs=world_size,
                      join=True)'''
-           #  train_module(model, train_params=mip_train_params,
-           #          train_dset=dataset.get_train_dset(mip=module_mip, stage=stage),
-           #          val_dset=dataset.get_val_dset(mip=module_mip, stage=stage),
-           #          checkpoint_path=os.path.join(module_path, "model"))
+            train_module(model, train_params=mip_train_params,
+                     train_dset=dataset.get_train_dset(mip=module_mip, stage=stage),
+                     val_dset=dataset.get_val_dset(mip=module_mip, stage=stage),
+                     checkpoint_path=os.path.join(module_path, "model"))
 
             print (f"Done training module {stage}!")
 

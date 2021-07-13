@@ -13,7 +13,7 @@
                     "disp_magn": 8,
                     "disp_diff": 4,
                     "sampling_params": {
-                        "sample_size": 16,
+                        "sample_size": 48,
                         "lower_perc": 0,
                         "higher_perc": 50,
                         "min_nonblack": 0.2,

@@ -2,9 +2,37 @@ import torch
 import time
 import numpy as np
 import six
+import cc3d
+import fastremap
 
 from metroem import helpers
 from metroem.loss import unsupervised_loss
+from metroem import masks
+
+
+def get_aligned_mask(tgt, pred_tgt, sensitivity=0.5):
+    tgt = helpers.get_np(tgt)
+    pred_tgt = helpers.get_np(pred_tgt)
+    diff = np.abs(helpers.get_np((tgt - pred_tgt)))
+    bad_pixels = diff > np.abs(tgt).max() * (1 - sensitivity)
+
+    bad_pixels_d = bad_pixels
+    for _ in range(2):
+        bad_pixels_d = masks.dilate(bad_pixels_d)
+    tgt_tissue = helpers.get_np(tgt != 0)
+    pred_tgt_tissue = helpers.get_np(pred_tgt != 0)
+    good_tissue = tgt_tissue * pred_tgt_tissue * (bad_pixels_d == 0)
+    return good_tissue
+
+def get_nailed_region(tgt, pred_tgt, sensitivity=0.5):
+    aligned_mask = get_aligned_mask(tgt, pred_tgt, sensitivity)
+    cc_labels = cc3d.connected_components(aligned_mask)
+    segids, counts = np.unique(cc_labels, return_counts=True)
+    segids = [ segid for segid, ct in zip(segids, counts) if ct > 50 ]
+    filtered_mask = fastremap.mask_except(cc_labels, segids, in_place=True) != 0
+    filtered_mask = masks.closing(filtered_mask, n=4)
+    return filtered_mask
+
 
 def combine_pre_post(res, pre, post):
     result = post.from_pixels()(res.from_pixels()(pre.from_pixels())).pixels()

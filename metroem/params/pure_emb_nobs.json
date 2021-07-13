@@ -11,14 +11,7 @@
                     "levels": [0],
                     "pure_emb": true,
                     "disp_magn": 8,
-                    "disp_diff": 4,
-                    "sampling_params": {
-                        "sample_size": 16,
-                        "lower_perc": 0,
-                        "higher_perc": 50,
-                        "min_nonblack": 0.2,
-                        "rebalance_black": true 
-                    }
+                    "disp_diff": 4
                 }
             },
             "mse_keys_to_apply":{

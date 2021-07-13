@@ -64,7 +64,7 @@ def random_crop(img, cropped_shape):
     return result
 
 
-def open_model(name, checkpoint_folder):
+def open_model(name, checkpoint_folder, device='cpu'):
     a = artificery.Artificery()
 
     spec_path = os.path.join(checkpoint_folder, "model_spec.json")
@@ -74,7 +74,7 @@ def open_model(name, checkpoint_folder):
     if os.path.isfile(checkpoint_path):
         my_p.load_state_dict(torch.load(checkpoint_path))
     my_p.name = name
-    return my_p.cuda()
+    return my_p.to(device)
 
 def create_model(name, model_spec, checkpoint_folder, write_spec=True):
     checkpoint_path = os.path.join(checkpoint_folder, "{}.state.pth.tar".format(name))
@@ -137,7 +137,7 @@ def create_model(name, model_spec, checkpoint_folder, write_spec=True):
 
     return my_p
 
-def to_tensor(np_array, device='cuda'):
+def to_tensor(np_array, device='cpu'):
     return torch.tensor(np_array, device=device)
 
 def expand_dims(tensor, dim_out):

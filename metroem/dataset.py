@@ -84,6 +84,7 @@ class MultimipDataset:
                 mip = int(match.group(5))
                 self.max_mip = max(mip, self.max_mip)
                 self.min_mip = min(mip, self.min_mip)
+
                 if name not in self.names:
                     self.names.add(name)
                     print(f"Adding '{name}' dataset.")
@@ -109,7 +110,7 @@ class MultimipDataset:
         for name in self.names:
             dset_list.append(self.get_img_dset(mip=mip, name=name))
         if len(dset_list) == 0:
-            raise Exceptoin(f"No image datasets found at MIP{mip}")
+            raise Exception(f"No image datasets found at MIP{mip}")
 
         self.img_composite_dsets[mip] = MyConcatDataset(dset_list)
 

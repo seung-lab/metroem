@@ -98,6 +98,7 @@ def download_section_image(vol,
     img = vol[x_offset:x_offset + patch_size,
               y_offset:y_offset + patch_size,
               z_range].squeeze((2,3))
+    print ((img != 0).sum())
     if defect_mask is not None:
         mask = defect_mask[x_offset:x_offset + patch_size,
                   y_offset:y_offset + patch_size,
