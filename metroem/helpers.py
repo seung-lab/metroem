@@ -148,7 +148,11 @@ def expand_dims(tensor, dim_out):
     return tensor
 
 def get_np(pt):
-        return pt.cpu().detach().numpy()
+    if type(pt) == np.ndarray:
+        return pt
+    if pt.device == torch.device('cpu'):
+        return pt.numpy()
+    return pt.cpu().detach().numpy()
 
 def compose_functions(fseq):
     def compose(f1, f2):
