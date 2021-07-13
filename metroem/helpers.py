@@ -151,7 +151,7 @@ def get_np(pt):
     if type(pt) == np.ndarray:
         return pt
     if pt.device == torch.device('cpu'):
-        return pt.numpy()
+        return pt.detach().numpy()
     return pt.cpu().detach().numpy()
 
 def compose_functions(fseq):
