@@ -180,7 +180,6 @@ def train_pyramid(world_size,
         if train_stages is None or stage in train_stages:
             print (f"Training module {stage}...")
             mip_train_params = train_params[str(module_mip)]
-            '''
             mp.spawn(train_module,
                      args=(world_size,
                            module_path,
@@ -191,7 +190,7 @@ def train_pyramid(world_size,
                            checkpoint_name, # checkpoint_name
                            None), # aug_params
                      nprocs=world_size,
-                     join=True)'''
+                     join=True)
            #  train_module(model, train_params=mip_train_params,
            #          train_dset=dataset.get_train_dset(mip=module_mip, stage=stage),
            #          val_dset=dataset.get_val_dset(mip=module_mip, stage=stage),
@@ -199,15 +198,15 @@ def train_pyramid(world_size,
 
             print (f"Done training module {stage}!")
 
-        if generate_field_stages is None or stage in generate_field_stages:
-            print (f"Generating fields with module {stage}...")
-            model = modelhouse.load_model_simple(module_path,
-                    finetune=True,
-                    pass_field=True,
-                    finetune_iter=300//(2**stage),
-                    checkpoint_name=checkpoint_name)
-            dataset.generate_fields(model, mip=module_mip, stage=stage)
-            print (f"Done generating fields with module {stage}...")
+        # if generate_field_stages is None or stage in generate_field_stages:
+        #     print (f"Generating fields with module {stage}...")
+        #     model = modelhouse.load_model_simple(module_path,
+        #             finetune=True,
+        #             pass_field=True,
+        #             finetune_iter=300//(2**stage),
+        #             checkpoint_name=checkpoint_name)
+        #     dataset.generate_fields(model, mip=module_mip, stage=stage)
+        #     print (f"Done generating fields with module {stage}...")
 
 
 def main():
