@@ -428,6 +428,7 @@ class AlignmentDataLoader(torch.utils.data.Dataset):
             "tgt": tgt,
             "src_zeros": src == 0,
             "tgt_zeros": tgt == 0,
+            "id": helpers.to_tensor(i, device=self.device),
         }
         if field is not None:
             bundle["src_field"] = field
