@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser.add_argument("--src_spec_path", type=str)
     parser.add_argument("--dst_spec_path", type=str)
     parser.add_argument("--points_path", type=str)
-    parser.add_argument("--offsets", type=int, nargs="+")
+    parser.add_argument("--offsets", type=int)
     parser.add_argument("--permute_pairs", action="store_true")
 
     args = parser.parse_args()
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     df = pd.read_csv(args.points_path, dtype=str)
     df = parse_df(df)
     for _, row in df.iterrows():
-        for i in args.offsets:
+        for i in range(args.offsets):
             iters = 1
             if args.permute_pairs:
                 iters = 2
