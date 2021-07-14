@@ -197,29 +197,32 @@ class Aligner(nn.Module):
             pred_res = pred_res.field().from_pixels()(src_agg_field).pixels()
 
         if finetune or (finetune is None and self.finetune):
-            if finetune_iter is None:
-                finetune_iter = self.finetune_iter
-            if finetune_lr is None:
-                finetune_lr = self.finetune_lr
-            if finetune_sm is None:
-                finetune_sm = self.finetune_sm
-                if final_stage:
-                    finetune_sm *= 10.0e0
-            embeddings = self.net.state['up']['0']['output']
-            src_opt = embeddings[0, 0:embeddings.shape[1]//2].unsqueeze(0).detach()
-            tgt_opt = embeddings[0, embeddings.shape[1]//2:].unsqueeze(0).detach()
+            if src_img.count_nonzero() == 0 or tgt_img.count_nonzero() == 0:
+                print('Skipping optimization for black chunk')
+            else:
+                if finetune_iter is None:
+                    finetune_iter = self.finetune_iter
+                if finetune_lr is None:
+                    finetune_lr = self.finetune_lr
+                if finetune_sm is None:
+                    finetune_sm = self.finetune_sm
+                    if final_stage:
+                        finetune_sm *= 10.0e0
+                embeddings = self.net.state['up']['0']['output']
+                src_opt = embeddings[0, 0:embeddings.shape[1]//2].unsqueeze(0).detach()
+                tgt_opt = embeddings[0, embeddings.shape[1]//2:].unsqueeze(0).detach()
 
-            src_defects = src_img == 0
-            tgt_defects = tgt_img == 0
-            #tgt_defects = None
+                src_defects = src_img == 0
+                tgt_defects = tgt_img == 0
+                #tgt_defects = None
 
-            pred_res = finetune_field(src_opt, tgt_opt,
-                    pred_res,
-                    src_defects=src_defects,
-                    tgt_defects=tgt_defects,
-                    lr=finetune_lr,
-                    num_iter=finetune_iter,
-                    sm=finetune_sm)
+                pred_res = finetune_field(src_opt, tgt_opt,
+                        pred_res,
+                        src_defects=src_defects,
+                        tgt_defects=tgt_defects,
+                        lr=finetune_lr,
+                        num_iter=finetune_iter,
+                        sm=finetune_sm)
         if return_state:
             return pred_res.field(), self.net.state
         else:
