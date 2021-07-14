@@ -176,7 +176,10 @@ def coarsen_mask(mask, n=1, flip=True):
             mask = convolve(mask, kernel) > 0
             mask = mask.astype(np.int16) > 1
         else:
-            kernel_var = torch.cuda.FloatTensor(kernel).unsqueeze(0).unsqueeze(0).to(mask.device)
+            if mask.device == torch.device('cpu'):
+                kernel_var = torch.FloatTensor(kernel).unsqueeze(0).unsqueeze(0).to(mask.device)
+            else:
+                kernel_var = torch.cuda.FloatTensor(kernel).unsqueeze(0).unsqueeze(0).to(mask.device)
             k = torch.nn.Parameter(data=kernel_var, requires_grad=False)
             if flip:
                 mask = mask.logical_not().float()

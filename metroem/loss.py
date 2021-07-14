@@ -380,7 +380,10 @@ def unsupervised_loss(smoothness_factor, smoothness_type='rig', use_defect_mask=
         loss_dict['similarity'] = similarity
         loss_dict['smoothness'] = smoothness * smoothness_factor * smoothness_mult
         loss_dict['vec_magnitude'] = torch.mean(torch.abs(bundle['pred_res']))
-        loss_dict['vec_sim'] = torch.cuda.FloatTensor([0])
+        if torch.cuda.is_available():
+            loss_dict['vec_sim'] = torch.cuda.FloatTensor([0])
+        else:
+            loss_dict['vec_sim'] = torch.FloatTensor([0])
         if 'res' in bundle:
             loss_dict['vec_sim'] = torch.mean(torch.abs(bundle['pred_res'] - bundle['res']))
         loss_dict['mse_mask'] = mse_mask
