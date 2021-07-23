@@ -292,7 +292,11 @@ def normalize(img, per_feature_center=True, per_feature_var=False, eps=1e-8,
 
     if mask is not None and mask_fill is not None:
         for b in range(img.shape[0]):
-            img_out[b, :, mask[b].squeeze() == False] = mask_fill
+            if len(img.shape) == 4:
+                img_out[b, :, mask[b, 0].squeeze() == False] = mask_fill
+            else:
+                assert len(img.shape) == 3
+                img_out[b, mask[b].squeeze() == False] = mask_fill
 
     return img_out
 
