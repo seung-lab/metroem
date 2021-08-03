@@ -114,29 +114,41 @@ def display_image(img, x_coords=None, y_coords=None, normalize=False, figsize=(1
     if normalize and mask:
         raise Exception("Masks can't be normalized")
     img = prepare_for_show(img)
-
-    if len(img.shape) == 3 and img.shape[-1] == 2:
+    #import pdb; pdb.set_trace()
+    if len(img.shape) == 3 and (img.shape[-1] == 2 or img.shape[0] == 2):
         visualize_residuals(img, x_coords=x_coords, y_coords=y_coords)
         return
-    
-    plt.figure(figsize=figsize)
+   
+    fig = plt.figure(figsize=figsize, tight_layout=True)
+    plt.axis('off')
+    plt.tight_layout()
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
     
     if x_coords is None:
         x_coords = [0, img.shape[0]]
     if y_coords is None:
         y_coords = [0, img.shape[1]]
-    
+    vmin = img.min()
+    vmax = img.max()
+    vmin += (vmax - vmin) * 0.3
+    vmax -= (vmax - vmin) * 0.2
+    fig = None
     if mask:
-        plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray')
+        fig = plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray')
     elif segmentation:
         cmap='gray'
         cmap = rand_cmap
         
-        plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]].astype(np.int32), cmap=cmap)
+        fig = plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]].astype(np.int32), cmap=cmap)
     elif not normalize:
-        plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray', vmin=vmin, vmax=vmax)
+        fig = plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray', vmin=vmin, vmax=vmax)
     else:
-        plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray')
+        fig = plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray')
+        #plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray', vmin=vmin, vmax=vmax)
+
+    #fig.update_layout(width=400, height=400, margin=dict(l=10, r=10, b=10, t=10))
+    #print(plt.margins(1, 1, tight=True))
+
     plt.show()
 
         
@@ -284,12 +296,12 @@ def get_aligner(checkpoint_folder,
                             finetune_iter=finetune_iter,
                             finetune=finetune)
 
-def get_dataset(data_dir, dataset_mip, stage, checkpoint_name, crop_mode=None, device='cuda'):
-    big_data = dataset.MultimipDataset(data_dir, field_tag=checkpoint_name, device=device)
+def get_dataset(data_dir, dataset_mip, stage, checkpoint_name, crop_mode=None, cropped_size=2048):
+    big_data = dataset.MultimipDataset(data_dir, field_tag=checkpoint_name)
     return big_data.get_train_dset(mip=dataset_mip,
                                     stage=stage,
-                                    crop_mode=None,
-                                    cropped_size=2048)
+                                    crop_mode=crop_mode,
+                                    cropped_size=cropped_size)
 
 
 class PyramidVisualizer(object):
@@ -509,10 +521,7 @@ class PyramidVisualizer(object):
                 'Combined': get_np(combined_identity_var)
             }
             
-            self.hist_dict = {
-                'Residual Histogram': get_np(viz_pred_res_var),
-            }
-            
+
             if self.sup:
                 self.vect_dict['True Residual'] = get_np(viz_true_res_var),
                 self.vect_dict['Residual Error'] =  get_np(viz_true_res_var - viz_pred_res_var)
@@ -551,14 +560,6 @@ class PyramidVisualizer(object):
             
             visualize_residuals(vecs, x_coords=x_coords, y_coords=y_coords)
 
-        elif choice in self.hist_dict:
-            img = self.hist_dict[choice]
-            x_section_size = img.shape[0] // section_count
-            y_section_size = img.shape[1] // section_count
-            
-            x_coords = (x_section_size * x_section, x_section_size * (x_section + 1))
-            y_coords = (y_section_size * y_section, y_section_size * (y_section + 1))
-            visualize_histogram(img, x_coords=x_coords, y_coords=y_coords)
        
     def visualize(self, section_count=1, state_file=None, default_slice=9, default_x=0, default_y=0):
         
@@ -639,8 +640,8 @@ class simple_visualizer():
         self.images[i].squeeze()
         img = self.images[i].squeeze()
         img = prepare_for_show(img)
-        x_section_size = img.shape[0] // section_count
-        y_section_size = img.shape[1] // section_count
+        x_section_size = img.shape[-2] // section_count
+        y_section_size = img.shape[-1] // section_count
 
         x_coords = (x_section_size * x_section, x_section_size * (x_section + 1))
         y_coords = (y_section_size * y_section, y_section_size * (y_section + 1))
@@ -746,8 +747,7 @@ class DatasetVisualizer(PyramidVisualizer):
             self.vect_dict = {
                 'Source Residual': get_np(src_res_var),
             }
-            
-            self.hist_dict = {}
+
     
     def loadimg(self, section_count, img_id, x_section, y_section, choice):
         self.compute_state(img_id)        

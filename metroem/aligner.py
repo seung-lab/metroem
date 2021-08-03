@@ -89,7 +89,6 @@ def create_model(checkpoint_folder, device='cpu', checkpoint_name="checkpoint"):
 
     checkpoint_path = os.path.join(checkpoint_folder,
             f"{checkpoint_name}.state.pth.tar")
-
     if not os.path.isfile(checkpoint_path):
         print ("creating new checkpiont...")
         return my_p
