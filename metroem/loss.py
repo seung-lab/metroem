@@ -5,6 +5,7 @@ import numpy as np
 import six
 import copy
 from collections import defaultdict
+import time
 
 from pdb import set_trace as st
 
@@ -136,29 +137,116 @@ def pix_identity(size, batch=1, device='cuda'):
     result = torch.transpose(result, 1, 2)
     return result
 
+# We ignore symmetric edges!
 def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
+#    print(field.shape) #1, 2, 1024, 1024
     field = field.permute(0, 2, 3, 1)
     identity = pix_identity(size=field.shape[-2], device=field.device)
     field_abs = field + identity
-    result = rigidity_score(field_dx(field_abs, forward=False), 1, power=power)
-    result += rigidity_score(field_dx(field_abs, forward=True), 1, power=power)
-    result += rigidity_score(field_dy(field_abs, forward=False), 1, power=power)
-    result += rigidity_score(field_dy(field_abs, forward=True), 1, power=power)
-    result += rigidity_score(field_dxy(field_abs, forward=True), 2**(1/2), power=power) * diagonal_mult
-    result += rigidity_score(field_dxy(field_abs, forward=False), 2**(1/2), power=power) * diagonal_mult
-    total = 4 + 2*diagonal_mult
+
+#    import time
+#    st = time.time()
+#    result = rigidity_score(field_dx(field_abs, forward=False), 1, power=power)
+#    result += rigidity_score(field_dx(field_abs, forward=True), 1, power=power)
+#    result += rigidity_score(field_dy(field_abs, forward=False), 1, power=power)
+#    result += rigidity_score(field_dy(field_abs, forward=True), 1, power=power)
+#    result += rigidity_score(field_dxy(field_abs, forward=True), 2**(1/2), power=power) * diagonal_mult
+#    result += rigidity_score(field_dxy(field_abs, forward=False), 2**(1/2), power=power) * diagonal_mult
+#    total = 4 + 2*diagonal_mult
+#    if two_diagonals:
+#        result += rigidity_score(field_dxy2(field_abs, forward=True), 2**(1/2), power=power) * diagonal_mult
+#        result += rigidity_score(field_dxy2(field_abs, forward=False), 2**(1/2), power=power) * diagonal_mult
+#        total += 2*diagonal_mult
+
+#    total = 2 + 2*diagonal_mult
+#    result /= total
+
+
+    #compensate for padding
+#    result[..., 0:6, :] = 0
+#    result[..., -6:, :] = 0
+#    result[..., :,  0:6] = 0
+#    result[..., :, -6:] = 0
+#    print(f'new: {time.time()-st}')
+
+#    r2 = result.clone()
+
+
+#    import time
+#    st = time.time()
+    field_abs = field_abs.permute(3,0,1,2) #2, 1, 1024, 1024
+    diff_ker = torch.tensor([
+        [
+          [[ 0, 0, 0],
+           [-1, 1, 0],
+           [ 0, 0, 0]],
+
+          [[ 0,-1, 0],
+           [ 0, 1, 0],
+           [ 0, 0, 0]],
+          
+          [[-1, 0, 0],
+           [ 0, 1, 0],
+           [ 0, 0, 0]],
+          
+          [[ 0, 0,-1],
+           [ 0, 1, 0],
+           [ 0, 0, 0]],
+          ]
+            ], dtype=field_abs.dtype, device=field_abs.device)
+
+    diff_ker = diff_ker.permute(1, 0, 2, 3)
+    delta = torch.conv2d(field_abs, diff_ker, padding = [1,1])
+    delta = delta.permute(1, 2, 3, 0) #4, 1024, 1024, 2
+
+    delta_sq = torch.pow(delta, 2) + 1e-8
+#    delta_sq = delta_sq.permute(0, 3, 1, 2) #4, 2, 1024, 1024
+
+    delta_sq_sum = torch.sum(delta_sq, 3)
+    spring_lengths = torch.sqrt(delta_sq_sum)
+
+    # speedup hack for diagonal_mult
+    spring_defs = torch.cat([spring_lengths[0:2, :, :] - 1, 
+                             (spring_lengths[2:4, :, :] - 2**(1/2)) * (diagonal_mult)**(1/power)], 0)
+
+    if power != 2:
+        spring_defs = spring_defs.abs()
+
+    spring_energies = torch.pow(spring_defs, power)
+
     if two_diagonals:
-        result += rigidity_score(field_dxy2(field_abs, forward=True), 2**(1/2), power=power) * diagonal_mult
-        result += rigidity_score(field_dxy2(field_abs, forward=False), 2**(1/2), power=power) * diagonal_mult
-        total += 2*diagonal_mult
+        result = torch.sum(spring_energies, 0)
+        total = 2 + 2* diagonal_mult
+    else:
+        result = torch.sum(spring_energies[0:3, :, :], 0)
+        total = 2 + diagonal_mult
+
+
+
+#    resulta  = rigidity_score(delta[0, :, :, :], 1, power=power)
+#    resulta += rigidity_score(delta[1, :, :, :], 1, power=power)
+#    resulta += rigidity_score(delta[2, :, :, :], 2**(1/2), power=power) * diagonal_mult
+#    print(torch.sum(resulta) / torch.sum(result))
+#    total = 2 + diagonal_mult
+#    if two_diagonals:
+#        result += rigidity_score(delta[3, :, :, :], 2**(1/2), power=power) * diagonal_mult
+#        total += diagonal_mult
 
     result /= total
 
-    #compensate for padding
+    #remove padding
     result[..., 0:6, :] = 0
     result[..., -6:, :] = 0
     result[..., :,  0:6] = 0
     result[..., :, -6:] = 0
+
+
+
+#    print(f'new: {time.time()-st}')
+#    print(torch.sum(r2) / torch.sum(result))
+#    print(torch.sum(result))
+    
+
 
     return result.squeeze()
 
@@ -201,9 +289,12 @@ def get_dataset_loss(model, dataset_loader, loss_fn, mip_in, *args, **kwargs):
 def similarity_score(bundle, weights=None, crop=32):
     tgt = bundle['tgt']
     pred_tgt = bundle['pred_tgt']
-    mse = ((tgt - pred_tgt)**2)
+
+    mse = torch.pow(tgt - pred_tgt, 2)
+
     if crop > 0:
         mse = mse[..., crop:-crop, crop:-crop]
+
     if weights is not None:
         weights = weights
         if crop > 0:
@@ -276,7 +367,7 @@ def similarity_sampling_loss(sample_size, unsup_loss, sample_coverage=0.001, min
 
 def multilevel_metric_loss(levels, mip_in, loss_fn,
         norm_embeddings=True, sm_div=False, train_thru=True,
-        pre_align_sample=None, pure_emb=False, pre_align_weight=0.7):
+        pre_align_sample=None):
 
     def compute_loss(loss_bundle, crop=32):
         loss_dict = defaultdict(lambda : 0)
@@ -305,11 +396,7 @@ def multilevel_metric_loss(levels, mip_in, loss_fn,
                     if 'field' in k or 'res' in k:
                         loss_bundle_emb[k] = loss_bundle_emb[k].from_pixels().down().pixels()
                     elif 'src_' in k or 'tgt_' in k:
-                        if loss_bundle_emb[k].dtype == torch.bool:
-                            loss_bundle_emb[k] = torch.nn.functional.max_pool2d(loss_bundle_emb[k].float(), 2).bool()
-                        else:
-                            loss_bundle_emb[k] = torch.nn.functional.max_pool2d(loss_bundle_emb[k], 2)
-
+                        loss_bundle_emb[k] = torch.nn.functional.max_pool2d(loss_bundle_emb[k], 2)
             if norm_embeddings:
                 with torch.set_grad_enabled(True):
                     loss_bundle_emb = helpers.normalize_bundle(loss_bundle_emb, per_feature_var=True, mask_fill=0)
@@ -319,17 +406,9 @@ def multilevel_metric_loss(levels, mip_in, loss_fn,
             #    loss_bundle_emb['pred_tgt'] = \
             #            loss_bundle_emb['src_field'].field().from_pixels()(loss_bundle_emb['src'])
 
-            if pure_emb:
-                auger = metroem.augmentations.RandomWarp(difficulty=2, max_disp=50, min_disp=-50)
-                aug_loss_bundle_emb = auger(copy.deepcopy(loss_bundle_emb))
-                pre_align_loss =  pre_align_loss_fn(loss_bundle_emb)['similarity']
-                print ('1', pre_align_loss)
-                pre_align_loss =  pre_align_loss_fn(aug_loss_bundle_emb)['similarity']
-                print ('2', pre_align_loss)
-            else:
-                pre_align_loss =  pre_align_loss_fn(loss_bundle_emb)['similarity']
 
-            loss_dict['result'] = loss_dict['result'] -  pre_align_weight * pre_align_loss / len(levels)
+            pre_align_loss =  pre_align_loss_fn(loss_bundle_emb)['similarity']
+            loss_dict['result'] = loss_dict['result'] - 0.9 * pre_align_loss / len(levels)
 
             if sm_div:
                 sm_mult = 1.0 / 2**(l - mip_in)
@@ -356,7 +435,12 @@ def multilevel_metric_loss(levels, mip_in, loss_fn,
 def unsupervised_loss(smoothness_factor, smoothness_type='rig', use_defect_mask=False,
                       sm_keys_to_apply={}, mse_keys_to_apply={}):
     def compute_loss(bundle, smoothness_mult=1.0, crop=32):
+    #    use_defect_mask = False
+        #smoothness_mult = 0
+        
+#        print(bundle['pred_res'].__class__)
         loss_dict = {}
+#        st = time.time()
         if use_defect_mask:
             mse_mask, smoothness_mask = get_mse_and_smoothness_masks(bundle,
                     sm_keys_to_apply=sm_keys_to_apply,
@@ -364,16 +448,26 @@ def unsupervised_loss(smoothness_factor, smoothness_type='rig', use_defect_mask=
         else:
             mse_mask = None
             smoothness_mask = None
+#        et = time.time()
+#        print(f'mask {et - st}')
+#        st = time.time()
         similarity = similarity_score(bundle,
                                       weights=mse_mask,
                                       crop=crop)
+#        similarity = torch.zeros(1, device=bundle['src'].device, dtype=torch.float32)
+#        et = time.time()
+#        print(f'similarity {et - st}')
         if smoothness_mult != 0:
+#            st = time.time()
             smoothness = smoothness_score(bundle,
                                       weights=smoothness_mask,
                                       smoothness_type=smoothness_type,
                                       crop=crop)
+#            et = time.time()
+#            print(f'smoothness {et - st}')
         else:
             smoothness = torch.zeros(1, device=bundle['src'].device, dtype=torch.float32)
+#        st = time.time()
         result =  similarity + smoothness * smoothness_factor
 
         loss_dict['result'] = result
@@ -385,6 +479,8 @@ def unsupervised_loss(smoothness_factor, smoothness_type='rig', use_defect_mask=
             loss_dict['vec_sim'] = torch.mean(torch.abs(bundle['pred_res'] - bundle['res']))
         loss_dict['mse_mask'] = mse_mask
         loss_dict['smoothness_mask'] = smoothness_mask
+#        et = time.time()
+#        print(f'rest {et - st}')
         return loss_dict
     return compute_loss
 
