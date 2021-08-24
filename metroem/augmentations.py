@@ -157,10 +157,12 @@ class RandomTranspose(object):
         coin = np.random.uniform()
         if coin < self.prob:
             for k, v in six.iteritems(bundle):
-                if 'field' not in k:
-                    bundle[k] = v.transpose(-1, -2)
+                if 'field' in k:
+                    bundle[k] = bundle[k].transpose(2,3).flip(2)
+                elif 'id' in k:
+                    pass
                 else:
-                    bundle['src_field'] = bundle['src_field'].transpose(2,3).flip(2)
+                    bundle[k] = v.transpose(-1, -2)
 
         return bundle
 
