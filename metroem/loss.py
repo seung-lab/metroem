@@ -140,21 +140,70 @@ def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
     field = field.permute(0, 2, 3, 1)
     identity = pix_identity(size=field.shape[-2], device=field.device)
     field_abs = field + identity
-    result = rigidity_score(field_dx(field_abs, forward=False), 1, power=power)
-    result += rigidity_score(field_dx(field_abs, forward=True), 1, power=power)
-    result += rigidity_score(field_dy(field_abs, forward=False), 1, power=power)
-    result += rigidity_score(field_dy(field_abs, forward=True), 1, power=power)
-    result += rigidity_score(field_dxy(field_abs, forward=True), 2**(1/2), power=power) * diagonal_mult
-    result += rigidity_score(field_dxy(field_abs, forward=False), 2**(1/2), power=power) * diagonal_mult
-    total = 4 + 2*diagonal_mult
+
+    ## Unoptimised code
+    #result = rigidity_score(field_dx(field_abs, forward=False), 1, power=power)
+    #result += rigidity_score(field_dx(field_abs, forward=True), 1, power=power)
+    #result += rigidity_score(field_dy(field_abs, forward=False), 1, power=power)
+    #result += rigidity_score(field_dy(field_abs, forward=True), 1, power=power)
+    #result += rigidity_score(field_dxy(field_abs, forward=True), 2**(1/2), power=power) * diagonal_mult
+    #result += rigidity_score(field_dxy(field_abs, forward=False), 2**(1/2), power=power) * diagonal_mult
+    #total = 4 + 2*diagonal_mult
+    #if two_diagonals:
+    #    result += rigidity_score(field_dxy2(field_abs, forward=True), 2**(1/2), power=power) * diagonal_mult
+    #    result += rigidity_score(field_dxy2(field_abs, forward=False), 2**(1/2), power=power) * diagonal_mult
+    #    total += 2*diagonal_mult
+
+    # Optimised code uses convolution and ignores symmetric edges
+    field_abs = field_abs.permute(3,0,1,2) #2, 1, 1024, 1024
+    diff_ker = torch.tensor([
+        [
+          [[ 0, 0, 0],
+           [-1, 1, 0],
+           [ 0, 0, 0]],
+
+          [[ 0,-1, 0],
+           [ 0, 1, 0],
+           [ 0, 0, 0]],
+
+          [[-1, 0, 0],
+           [ 0, 1, 0],
+           [ 0, 0, 0]],
+
+          [[ 0, 0,-1],
+           [ 0, 1, 0],
+           [ 0, 0, 0]],
+          ]
+            ], dtype=field_abs.dtype, device=field_abs.device)
+
+    diff_ker = diff_ker.permute(1, 0, 2, 3)
+
+    delta = torch.conv2d(field_abs, diff_ker, padding = [1,1])
+    delta = delta.permute(1, 2, 3, 0)
+
+    delta_sq = torch.pow(delta, 2) + 1e-8
+    delta_sq_sum = torch.sum(delta_sq, 3)
+
+    spring_lengths = torch.sqrt(delta_sq_sum)
+    spring_defs = torch.cat([spring_lengths[0:2, :, :] - 1, 
+                             (spring_lengths[2:4, :, :] - 2**(1/2)) * (diagonal_mult)**(1/power)], 0)
+
+    if power != 2:
+        spring_defs = spring_defs.abs()
+
+    spring_energies = torch.pow(spring_defs, power)
+
     if two_diagonals:
-        result += rigidity_score(field_dxy2(field_abs, forward=True), 2**(1/2), power=power) * diagonal_mult
-        result += rigidity_score(field_dxy2(field_abs, forward=False), 2**(1/2), power=power) * diagonal_mult
+        result = torch.sum(spring_energies, 0)
+        total = 2 + 2 * diagonal_mult
         total += 2*diagonal_mult
+    else:
+        result = torch.sum(spring_energies[0:3, :, :], 0)
+        total = 2 + diagonal_mult
 
     result /= total
 
-    #compensate for padding
+    #remove for padding
     result[..., 0:6, :] = 0
     result[..., -6:, :] = 0
     result[..., :,  0:6] = 0
@@ -201,7 +250,7 @@ def get_dataset_loss(model, dataset_loader, loss_fn, mip_in, *args, **kwargs):
 def similarity_score(bundle, weights=None, crop=32):
     tgt = bundle['tgt']
     pred_tgt = bundle['pred_tgt']
-    mse = ((tgt - pred_tgt)**2)
+    mse = torch.pow(tgt - pred_tgt, 2)
     if crop > 0:
         mse = mse[..., crop:-crop, crop:-crop]
     if weights is not None:
