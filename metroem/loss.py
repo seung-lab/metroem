@@ -196,7 +196,6 @@ def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
     if two_diagonals:
         result = torch.sum(spring_energies, 0)
         total = 2 + 2 * diagonal_mult
-        total += 2*diagonal_mult
     else:
         result = torch.sum(spring_energies[0:3, :, :], 0)
         total = 2 + diagonal_mult
