@@ -205,8 +205,8 @@ class Aligner(nn.Module):
                 if final_stage:
                     finetune_sm *= 10.0e0
             embeddings = self.net.state['up']['0']['output']
-            src_opt = embeddings[0, 0:embeddings.shape[1]//2].unsqueeze(0).detach()
-            tgt_opt = embeddings[0, embeddings.shape[1]//2:].unsqueeze(0).detach()
+            src_opt = embeddings[0, 1:embeddings.shape[1]//2].unsqueeze(0).detach()
+            tgt_opt = embeddings[0, 1+embeddings.shape[1]//2:].unsqueeze(0).detach()
 
             src_defects = src_img == 0
             tgt_defects = tgt_img == 0
