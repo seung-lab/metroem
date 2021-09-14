@@ -204,11 +204,11 @@ def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
 
     result /= total
 
-    #remove for padding
-    result[..., 0:6, :] = 0
-    result[..., -6:, :] = 0
-    result[..., :,  0:6] = 0
-    result[..., :, -6:] = 0
+    #remove incorrect smoothness values caused by 1px zero padding
+    result[..., 0:2, :] = 0
+    result[..., -2:, :] = 0
+    result[..., :,  0:2] = 0
+    result[..., :, -2:] = 0
 
     return result.squeeze()
 

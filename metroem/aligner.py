@@ -11,8 +11,17 @@ import torchfields
 
 from metroem.finetuner import optimize_pre_post_ups
 
-def finetune_field(src, tgt, pred_res_start, src_defects=None, tgt_defects=None, lr=18e-1, sm=300e0, num_iter=60):
-
+def finetune_field(
+    src,
+    tgt,
+    pred_res_start,
+    src_defects=None,
+    tgt_defects=None,
+    lr=18e-1,
+    sm=300e0,
+    num_iter=60,
+    crop=1
+):
     mse_keys_to_apply = {
         'src': [
             {
@@ -72,13 +81,20 @@ def finetune_field(src, tgt, pred_res_start, src_defects=None, tgt_defects=None,
         tgt_defects = tgt_defects.squeeze(0)
     else:
         tgt_defects = torch.zeros_like(src_defects)
-    pred_res_opt = optimize_pre_post_ups(src, tgt, pred_res_start,
-                                    src_defects=src_defects,
-                                    tgt_defects=tgt_defects,
-                                    crop=1, num_iter=num_iter,
-                                    sm_keys_to_apply=sm_keys_to_apply,
-                                    mse_keys_to_apply=mse_keys_to_apply,
-                                    sm=sm, lr=lr, verbose=True)
+    pred_res_opt = optimize_pre_post_ups(
+        src,
+        tgt,
+        pred_res_start,
+        src_defects=src_defects,
+        tgt_defects=tgt_defects,
+        crop=crop,
+        num_iter=num_iter,
+        sm_keys_to_apply=sm_keys_to_apply,
+        mse_keys_to_apply=mse_keys_to_apply,
+        sm=sm,
+        lr=lr,
+        verbose=True,
+    )
     return pred_res_opt
 
 def create_model(checkpoint_folder, device='cpu', checkpoint_name="checkpoint"):
@@ -135,9 +151,18 @@ def load_my_state_dict(model, state_dict, delta=0):
 
 
 class Aligner(nn.Module):
-    def __init__(self, model_folder, pass_field=True, checkpoint_name="checkpoint",
-            finetune=False, finetune_iter=100, finetune_lr=1e-1, finetune_sm=30e0,
-            train=False):
+    def __init__(
+        self,
+        model_folder,
+        pass_field=True,
+        checkpoint_name="checkpoint",
+        finetune=False,
+        finetune_iter=100,
+        finetune_lr=1e-1,
+        finetune_sm=30e0,
+        train=False,
+        crop=None,
+    ):
         super().__init__()
 
         this_folder = pathlib.Path(__file__).parent.absolute()
@@ -149,6 +174,7 @@ class Aligner(nn.Module):
         self.finetune_lr = finetune_lr
         self.finetune_sm = finetune_sm
         self.train = train
+        self.crop = crop
 
     def forward(self, src_img, tgt_img, src_agg_field=None, tgt_agg_field=None,
             src_folds=None, tgt_folds=None,
@@ -212,13 +238,17 @@ class Aligner(nn.Module):
             tgt_defects = tgt_img == 0
             #tgt_defects = None
 
-            pred_res = finetune_field(src_opt, tgt_opt,
-                    pred_res,
-                    src_defects=src_defects,
-                    tgt_defects=tgt_defects,
-                    lr=finetune_lr,
-                    num_iter=finetune_iter,
-                    sm=finetune_sm)
+            pred_res = finetune_field(
+                src_opt,
+                tgt_opt,
+                pred_res,
+                src_defects=src_defects,
+                tgt_defects=tgt_defects,
+                lr=finetune_lr,
+                num_iter=finetune_iter,
+                sm=finetune_sm,
+                crop=self.crop,
+            )
         if return_state:
             return pred_res.field(), self.net.state
         else:
