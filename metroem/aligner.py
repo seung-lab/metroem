@@ -161,7 +161,7 @@ class Aligner(nn.Module):
         finetune_lr=1e-1,
         finetune_sm=30e0,
         train=False,
-        crop=None,
+        crop=1,
     ):
         super().__init__()
 
