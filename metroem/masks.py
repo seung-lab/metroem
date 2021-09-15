@@ -46,7 +46,7 @@ def get_prewarp_mask(bundle, keys_to_apply, inv=False):
             if mask_value_in_settings != None:
                 prewarp_result = torch.where(mask != 1.0, torch.tensor(mask_value_in_settings, device=prewarp_result.device), prewarp_result)
             else:
-                torch.where(mask != 1.0, torch.zeros(1, device=prewarp_result.device), prewarp_result)
+                prewarp_result = torch.where(mask != 1.0, torch.zeros(1, device=prewarp_result.device), prewarp_result)
 
             around_the_mask = mask
             if coarsen_ranges_in_settings != None:
@@ -146,7 +146,7 @@ def get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply):
         if bundle.get('tgt_comb_mask_sm_prewarp') == None:
             bundle['tgt_comb_mask_sm_prewarp'] = get_prewarp_mask(bundle, sm_keys_to_apply['src_tgt_comb']['tgt'])
         src_comb_mask_sm = warp_prewarp_mask(bundle['src_comb_mask_sm_prewarp'], bundle['pred_res_zeros'], do_nothing = True)
-        src_comb_mask_sm = warp_prewarp_mask(bundle['tgt_comb_mask_sm_prewarp'], bundle['pred_res_zeros'], do_nothing = True)
+        tgt_comb_mask_sm = warp_prewarp_mask(bundle['tgt_comb_mask_sm_prewarp'], bundle['pred_res_zeros'], do_nothing = True)
         mask_sm *= ((tgt_comb_mask_sm + src_comb_mask_sm) > 0).float()
 
     mask_mse = torch.cat([mask_mse] * num_channels, channel_dim)
