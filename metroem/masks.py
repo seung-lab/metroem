@@ -71,55 +71,6 @@ def warp_prewarp_mask(prewarp_result, res, do_nothing=False, inv=False):
             result = prewarp_result
     return result
 
-def get_warped_mask_set(bundle, res, keys_to_apply, inv=False):
-    prewarp_result = torch.ones((1, bundle['src'].shape[-2], bundle['src'].shape[-1]),
-                        device=bundle['src'].device)
-    res = res.squeeze()
-    for settings in keys_to_apply:
-        name = settings['name']
-        name_in_bundle = bundle.get(name)
-        if name_in_bundle != None:
-            mask = name_in_bundle.squeeze()
-
-            fm_in_settings = settings.get('fm')
-            bin_in_settings = settings.get('binarization')
-            mask_value_in_settings = settings.get('mask_value')
-            coarsen_ranges_in_settings = settings.get('coarsen_ranges')
-
-            if fm_in_settings != None and len(mask.shape) > 2:
-                mask = mask[fm_in_settings:fm_in_settings+1]
-
-            while len(mask.shape) < len(prewarp_result.shape):
-                mask = mask.unsqueeze(0)
-
-            if bin_in_settings != None:
-                mask = binarize(mask, bin_in_settings)
-
-            if mask_value_in_settings != None:
-                prewarp_result = torch.where(mask != 1.0, prewarp_result, torch.tensor(mask_value_in_settings, device=prewarp_result.device))
-            else:
-                prewarp_result = torch.where(mask != 1.0, prewarp_result, torch.zeros(1, device=prewarp_result.device))
-
-            around_the_mask = mask
-            if coarsen_ranges_in_settings != None:
-
-                for length, weight in coarsen_ranges_in_settings:
-                    if length > 10:
-                        around_the_mask = coarsen_mask(around_the_mask, length)
-                    else:
-                        around_the_mask = coarsen_mask(around_the_mask, length)
-                    torch.where((around_the_mask != 1.0) * (prewarp_result == 1.0), 
-                            prewarp_result, torch.tensor(weight, dtype=prewarp_result.dtype, device=prewarp_result.device))
-
-    if (res != 0).sum() > 0 and not inv:
-        if res.shape[1] == 2:
-            result = res(prewarp_result.float())
-        else:
-            result = res.from_pixels()(prewarp_result.float())
-    else:
-        result = prewarp_result
-    return result
-
 
 def binarize(img, bin_setting):
     if bin_setting['strat']== 'eq':
