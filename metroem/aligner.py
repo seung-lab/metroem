@@ -27,36 +27,37 @@ def finetune_field(
             {
                 'name': 'src_defects',
                 'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
+                # 'coarsen_ranges': [(1, 0)]
              }
             ],
         'tgt':[
             {
                 'name': 'tgt_defects',
                 'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
             }
         ]
     }
 
     sm_keys_to_apply = {
        "src": [
-         {
-             "name": "src_defects",
-             "mask_value": 1.0e-5,
-             "binarization": {"strat": "eq", "value": 0},
-             'coarsen_ranges': [(1, 0)]
-         }
-       ],
-       "tgt": [
+            # 
             {
-                'name': 'tgt_defects',
-                'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
-             }
-       ]
+                "name": "src_defects",
+                "mask_value": 0.00001,
+                "binarization": {"strat": "eq", "value": 0},
+            },
 
-   }
+        ],
+    #    "tgt": [
+    #         {
+    #             'name': 'tgt_defects',
+    #             "mask_value": 0.0,
+    #             'binarization': {'strat': 'eq', 'value': 0},
+    #             # 'coarsen_ranges': [(1, 0)]
+    #          }
+    #    ]
+
+    }
 
 
     src_small_defects = None
@@ -200,6 +201,21 @@ class Aligner(nn.Module):
             while len(src_agg_field.shape) < 4:
                 src_agg_field = src_agg_field.unsqueeze(0)
 
+        # Check for empty source or target
+        if (src_img.sum() == 0) or (tgt_img.sum() == 0):
+            if src_agg_field is None:
+                shape = list(src_img.shape)
+                shape[1] = 2
+                pred_res = torchfields.Field.zeros(shape, dtype=src_img.dtype, device=src_img.device)
+            else:
+                pred_res = torch.field(src_agg_field)
+
+            if return_state:
+                return pred_res, self.net.state
+            else:
+                return pred_res
+
+        if src_agg_field is not None:
             src_agg_field = src_agg_field.field().from_pixels()
             warped_src_img = src_agg_field(src_img)
             src_agg_field = src_agg_field.pixels()

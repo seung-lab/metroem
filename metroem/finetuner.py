@@ -4,6 +4,7 @@ import numpy as np
 import six
 import cc3d
 import fastremap
+from collections import defaultdict
 
 from metroem import helpers
 from metroem.loss import unsupervised_loss
@@ -50,12 +51,15 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       optimize_init=False,
                       sm_keys_to_apply={},
                       mse_keys_to_apply={},
-                      verbose=False,
+                      verbose=True,
                       mask_around_nailed=False,
                       nailed_check_period=None,
                       max_bad=15
 
                     ):
+
+    timings = defaultdict(float)
+    ts = time.time()
     opti_loss = unsupervised_loss(
           smoothness_factor=sm, use_defect_mask=True,
           sm_keys_to_apply=sm_keys_to_apply,
@@ -82,31 +86,33 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     elif opt_mode == 'sgd':
         optimizer = torch.optim.SGD(trainable, lr=lr, **opt_params)
 
-    tgt_zeros = tgt[:, 0] == 0
-    src_zeros = src[:, 0] == 0
-
     if normalize:
         with torch.no_grad():
-            src = helpers.normalize(src, mask=src!=0, mask_fill=0)
-            tgt = helpers.normalize(tgt, mask=tgt!=0, mask_fill=0)
+            src_mask = torch.logical_not(src_defects)
+            tgt_mask = torch.logical_not(tgt_defects)
+
+            while src_mask.ndim < src.ndim:
+                src_mask.unsqueeze_(0)
+            while tgt_mask.ndim < src.ndim:
+                tgt_mask.unsqueeze_(0)
+
+            src = helpers.normalize(src, mask=src_mask, mask_fill=0)
+            tgt = helpers.normalize(tgt, mask=tgt_mask, mask_fill=0)
 
     loss_bundle = {
         'src': src,
         'tgt': tgt,
+        'src_defects': src_defects,
         'tgt_defects': tgt_defects,
-        'src_zeros': src_zeros,
-        'tgt_zeros': tgt_zeros
     }
-
-    loss_bundle['src_defects'] = src_defects
 
     prev_loss = []
     s = time.time()
 
-    last_nailed = 0
-    original_tgt = tgt
-    original_tgt_zeros = helpers.get_np(original_tgt[0, 0] == 0)
-    nail_mask = None
+    # last_nailed = 0
+    # original_tgt = tgt
+    # original_tgt_zeros = helpers.get_np(original_tgt[0, 0] == 0)
+    # nail_mask = None
 
     if normalize:
         with torch.no_grad():
@@ -123,105 +129,100 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     nan_count = 0
     no_impr_count = 0
     new_best_count = 0
+
     if verbose:
         print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
 
-    for epoch in range(num_iter):
-        loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res).up(opt_res_coarsness)
+    timings["01 Preparation"] += (time.time() - ts)
+    prof = None
+    with torch.autograd.profiler.profile(enabled=False, use_cpu=True, use_cuda=True, with_stack=True) as prof:
+        for epoch in range(num_iter):
+            ts = time.time()
+            loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res).up(opt_res_coarsness)
+            loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
+            timings["02 Combine Pre Post"] += (time.time() - ts)
 
-        loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
-        loss_dict = opti_loss(loss_bundle, crop=crop)
-        loss_var = loss_dict['result']
-        #print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
-        loss_var += (loss_bundle['pred_res']**2).mean() * l2
-        curr_loss = loss_var.cpu().detach().numpy()
+            ts = time.time()
+            loss_dict = opti_loss(loss_bundle, crop=crop)
+            loss_var = loss_dict['result']
+            #print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
+            loss_var += (loss_bundle['pred_res']**2).mean() * l2
+            curr_loss = loss_var.cpu().detach().numpy()
+            timings["03 Opti Loss"] += (time.time() - ts)
 
-        #print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
-        if np.isnan(curr_loss):
-            nan_count += 1
-            lr /= 1.5
-            lr_halfed_count += 1
-            pre_res = prev_pre_res.clone().detach()
-            post_res = prev_post_res.clone().detach()
-            post_res.requires_grad = True
-            pre_res.requires_grad = True
-            trainable = [pre_res, post_res]
-            if opt_mode == 'adam':
-                optimizer = torch.optim.Adam([pre_res, post_res], lr=lr, weight_decay=wd)
-            elif opt_mode == 'sgd':
-                optimizer = torch.optim.SGD([pre_res, post_res], lr=lr, **opt_params)
-            prev_loss = []
-            new_best_ago = 0
-        else:
-            min_improve = 1e-11
-            if not np.isnan(curr_loss) and curr_loss + min_improve <= best_loss:
-                prev_pre_res = pre_res.clone()
-                prev_post_res = post_res.clone()
-                best_loss = curr_loss
-                #print ("new best")
-                new_best_count += 1
+            #print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
+            ts = time.time()
+            if np.isnan(curr_loss):
+                nan_count += 1
+                lr /= 1.5
+                lr_halfed_count += 1
+                pre_res = prev_pre_res.clone().detach()
+                post_res = prev_post_res.clone().detach()
+                post_res.requires_grad = True
+                pre_res.requires_grad = True
+                trainable = [pre_res, post_res]
+                if opt_mode == 'adam':
+                    optimizer = torch.optim.Adam([pre_res, post_res], lr=lr, weight_decay=wd)
+                elif opt_mode == 'sgd':
+                    optimizer = torch.optim.SGD([pre_res, post_res], lr=lr, **opt_params)
+                prev_loss = []
                 new_best_ago = 0
+                timings["04 Optimizer Setup"] += (time.time() - ts)
             else:
-                new_best_ago += 1
-                if new_best_ago > noimpr_period:
-                    #print ("No improvement, reducing lr")
-                    no_impr_count += 1
-                    lr /= 2
-                    lr_halfed_count += 1
-                    #pre_res = prev_pre_res.clone().detach()
-                    #post_res = prev_post_res.clone().detach()
-                    #post_res.requires_grad = True
-                    #pre_res.requires_grad = True
-                    if opt_mode == 'adam':
-                        optimizer = torch.optim.Adam([pre_res, post_res], lr=lr)
-                    elif opt_mode == 'sgd':
-                        optimizer = torch.optim.SGD([pre_res, post_res], lr=lr, **opt_params)
-                    new_best_ago -= 5
-                prev_loss.append(curr_loss)
-
-            optimizer.zero_grad()
-            loss_var.backward()
-            #torch.nn.utils.clip_grad_norm([pre_res, post_res], 4e0)
-            pre_res.grad[pre_res.grad != pre_res.grad] = 0
-            post_res.grad[post_res.grad != post_res.grad] = 0
-            optimizer.step()
-
-            if lr_halfed_count >= max_bad or nan_count > max_bad:
-                break
-
-        if epoch != 0 and nailed_check_period is not None and \
-                epoch % nailed_check_period == 0:
-
-            nailed_region = get_nailed_region(tgt[0, 0], loss_bundle['pred_tgt'][0, 0])
-            this_nailed = nailed_region.sum()
-            if verbose:
-                print (f"Nailed : {this_nailed}/{(tgt[0, 0] != 0).sum().item()} px")
-            if this_nailed - last_nailed < last_nailed * 0.1:
-                if verbose:
-                    print ("SLOW NAILING")
-                if mask_around_nailed:
-                    if nail_mask is None:
-                        nail_mask = nailed_region
-                        for _ in range(2):
-                            nail_mask[original_tgt_zeros] = 0
-                            nail_mask = masks.dilate(nail_mask)
-                    else:
-                        for _ in range(1):
-                            nail_mask[original_tgt_zeros] = 0
-                            nail_mask = masks.dilate(nail_mask)
-
-                    tgt = original_tgt.clone()
-                    tgt[:, :, nail_mask == 0] = 0
-                    loss_bundle['tgt'] = tgt
-                    new_best_ago = 0
+                min_improve = 1e-11
+                if not np.isnan(curr_loss) and curr_loss + min_improve <= best_loss:
+                    prev_pre_res = pre_res.clone()
+                    prev_post_res = post_res.clone()
                     best_loss = curr_loss
-            last_nailed = this_nailed
+                    #print ("new best")
+                    new_best_count += 1
+                    new_best_ago = 0
+                else:
+                    new_best_ago += 1
+                    if new_best_ago > noimpr_period:
+                        #print ("No improvement, reducing lr")
+                        no_impr_count += 1
+                        lr /= 2
+                        lr_halfed_count += 1
+                        #pre_res = prev_pre_res.clone().detach()
+                        #post_res = prev_post_res.clone().detach()
+                        #post_res.requires_grad = True
+                        #pre_res.requires_grad = True
+                        if opt_mode == 'adam':
+                            optimizer = torch.optim.Adam([pre_res, post_res], lr=lr)
+                        elif opt_mode == 'sgd':
+                            optimizer = torch.optim.SGD([pre_res, post_res], lr=lr, **opt_params)
+                        new_best_ago -= 5
+                    prev_loss.append(curr_loss)
+                timings["04 Optimizer Setup"] += (time.time() - ts)
+                ts = time.time()
+                optimizer.zero_grad()
+                loss_var.backward()
+                #torch.nn.utils.clip_grad_norm([pre_res, post_res], 4e0)
+                torch.nan_to_num_(pre_res.grad, 0)
+                torch.nan_to_num_(post_res.grad, 0)
+                optimizer.step()
+                timings["05 Backward Step"] += (time.time() - ts)
 
+                if lr_halfed_count >= max_bad or nan_count > max_bad:
+                    break
 
+    if prof is not None:
+        with open("timings3.log", "a") as f:
+            f.write(str(prof.key_averages(group_by_stack_n=7).table(sort_by="cuda_time_total", top_level_events_only=True)))
+            f.write("\n*******************************************\n\n")
+
+    ts = time.time()
     loss_bundle['pred_res'] = combine_pre_post(pred_res, prev_pre_res, prev_post_res).up(opt_res_coarsness)
 
     loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
     loss_dict = opti_loss(loss_bundle, crop=crop)
+    timings["06 Final Step"] += (time.time() - ts)
+
+    print("\n")
+    for k, v in timings.items():
+        print(f"{k}: {round(v, 4)}")
+    print("\n")
 
     e = time.time()
     if verbose:
@@ -229,6 +230,10 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
         print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
         print (e - s)
         print ('==========')
+
+    print(1000*(e-s) / epoch, "ms per epoch")
+
+    # exit(0)
 
 
     return loss_bundle['pred_res']

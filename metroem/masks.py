@@ -73,7 +73,7 @@ def warp_prewarp_mask(prewarp_result, res, do_nothing=False, inv=False):
     if do_nothing:
         result = prewarp_result
     else:
-        if ((res != 0).sum() > 0) and not inv:
+        if (res != 0).any() and not inv:
             result = res.from_pixels()(prewarp_result)
         else:
             result = prewarp_result
@@ -106,7 +106,6 @@ def get_mse_and_smoothness_masks(bundle, mse_keys_to_apply, sm_keys_to_apply, **
     if "tgt" not in sm_keys_to_apply:
         sm_keys_to_apply["tgt"] = []
     return get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply)
-
 
 def get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply):
     src_shape = bundle["src"].shape

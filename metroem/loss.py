@@ -134,9 +134,12 @@ def pix_identity(size, batch=1, device='cuda'):
     result = torch.transpose(result, 1, 2)
     result[:, :, :, 1] = x
     result = torch.transpose(result, 1, 2)
+
+    # x, y = torch.meshgrid(torch.arange(size, device=device), torch.arange(size, device=device))
+    # result = torch.dstack((y,x)).reshape(1, size, size, 2).repeat_interleave(batch, dim=0)
     return result
 
-def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
+def rigidity(field, power=2, diagonal_mult=1.0):
     field = field.permute(0, 2, 3, 1)
     identity = pix_identity(size=field.shape[-2], device=field.device)
     field_abs = field + identity
@@ -183,28 +186,21 @@ def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
     delta = torch.conv2d(field_abs, diff_ker, padding = [1,1])
     delta = delta.permute(1, 2, 3, 0)
 
-    delta_sq = torch.pow(delta, 2) + 1e-8
-    delta_sq_sum = torch.sum(delta_sq, 3)
+    spring_lengths = torch.norm(delta, dim=3)
 
-    spring_lengths = torch.sqrt(delta_sq_sum)
-    spring_defs = torch.cat([spring_lengths[0:4, :, :] - 1, 
-                             (spring_lengths[4:8, :, :] - 2**(1/2)) * (diagonal_mult)**(1/power)], 0)
+    # Speedup hack for diagonal_mult
+    spring_defs = torch.cat([
+        spring_lengths[0:4, :, :] - 1, 
+        (spring_lengths[4:8, :, :] - 2**(1/2)) * (diagonal_mult)**(1/power)
+    ], 0)
 
-    if power != 2:
-        spring_defs = spring_defs.abs()
+    # Slightly faster than sum() + pow(), and no need for abs() if power is odd
+    result = torch.norm(spring_defs, p=power, dim=0).pow(power)
 
-    spring_energies = torch.pow(spring_defs, power)
-
-    if two_diagonals:
-        result = torch.sum(spring_energies, 0)
-        total = 4 + 4 * diagonal_mult
-    else:
-        result = torch.sum(spring_energies[0:6, :, :], 0)
-        total = 4 + 2 * diagonal_mult
-
+    total = 4 + 4 * diagonal_mult
     result /= total
 
-    #remove incorrect smoothness values caused by 1px zero padding
+    # Remove incorrect smoothness values caused by 1px zero padding
     result[..., 0:2, :] = 0
     result[..., -2:, :] = 0
     result[..., :,  0:2] = 0
@@ -437,5 +433,3 @@ def unsupervised_loss(smoothness_factor, smoothness_type='rig', use_defect_mask=
         loss_dict['smoothness_mask'] = smoothness_mask
         return loss_dict
     return compute_loss
-
-
