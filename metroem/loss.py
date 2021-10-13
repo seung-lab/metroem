@@ -148,48 +148,40 @@ def rigidity(field, power=2, diagonal_mult=1.0):
            [-1, 1, 0],
            [ 0, 0, 0]],
 
-          [[ 0, 0, 0],
-           [ 0, 1, -1],
-           [ 0, 0, 0]],
-
           [[ 0,-1, 0],
            [ 0, 1, 0],
            [ 0, 0, 0]],
-
-          [[ 0, 0, 0],
-           [ 0, 1, 0],
-           [ 0,-1, 0]],
 
           [[-1, 0, 0],
            [ 0, 1, 0],
            [ 0, 0, 0]],
 
-          [[ 0, 0, 0],
-           [ 0, 1, 0],
-           [ 0, 0,-1]],
-
           [[ 0, 0,-1],
            [ 0, 1, 0],
            [ 0, 0, 0]],
-
-          [[ 0, 0, 0],
-           [ 0, 1, 0],
-           [-1, 0, 0]],
-          ]
+        ]
     ], dtype=field_abs.dtype, device=field_abs.device)
 
     diff_ker = diff_ker.permute(1, 0, 2, 3)
 
-    delta = torch.conv2d(field_abs, diff_ker, padding = [1,1])
+    delta = torch.conv2d(field_abs, diff_ker, padding = [2, 2])
     delta = delta.permute(1, 2, 3, 0)
 
     spring_lengths = torch.norm(delta, dim=3)
 
-    spring_defs = torch.cat([spring_lengths[0:4, :, :] - 1, 
-                             (spring_lengths[4:8, :, :] - 2**(1/2)) * (diagonal_mult)**(1/power)], 0)
+    spring_defs = torch.stack([
+        spring_lengths[0, 1:-1, 1:-1] - 1,
+        spring_lengths[0, 1:-1, 2:  ] - 1,
 
-    if power != 2:
-        spring_defs = spring_defs.abs()
+        spring_lengths[1, 1:-1, 1:-1] - 1,
+        spring_lengths[1, 2:  , 1:-1] - 1,
+
+        (spring_lengths[2, 1:-1, 1:-1] - 2**(1/2)) * (diagonal_mult)**(1/power),
+        (spring_lengths[2, 2:  , 2:  ] - 2**(1/2)) * (diagonal_mult)**(1/power),
+
+        (spring_lengths[3, 1:-1, 1:-1] - 2**(1/2)) * (diagonal_mult)**(1/power),
+        (spring_lengths[3, 2: ,  0:-2] - 2**(1/2)) * (diagonal_mult)**(1/power),
+    ])
 
     # Slightly faster than sum() + pow(), and no need for abs() if power is odd
     result = torch.norm(spring_defs, p=power, dim=0).pow(power)
@@ -198,10 +190,10 @@ def rigidity(field, power=2, diagonal_mult=1.0):
 
     result /= total
 
-    #remove incorrect smoothness values caused by 1px zero padding
+    # Remove incorrect smoothness values caused by 2px zero padding
     result[..., 0:2, :] = 0
     result[..., -2:, :] = 0
-    result[..., :,  0:2] = 0
+    result[..., :, 0:2] = 0
     result[..., :, -2:] = 0
 
     return result.squeeze()
