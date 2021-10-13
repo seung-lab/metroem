@@ -136,7 +136,7 @@ def pix_identity(size, batch=1, device='cuda'):
     result = torch.transpose(result, 1, 2)
     return result
 
-def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
+def rigidity(field, power=2, diagonal_mult=1.0):
     field = field.permute(0, 2, 3, 1)
     identity = pix_identity(size=field.shape[-2], device=field.device)
     field_abs = field + identity
@@ -195,12 +195,8 @@ def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
 
     spring_energies = torch.pow(spring_defs, power)
 
-    if two_diagonals:
-        result = torch.sum(spring_energies, 0)
-        total = 4 + 4 * diagonal_mult
-    else:
-        result = torch.sum(spring_energies[0:6, :, :], 0)
-        total = 4 + 2 * diagonal_mult
+    result = torch.sum(spring_energies, 0)
+    total = 4 + 4 * diagonal_mult
 
     result /= total
 
