@@ -200,6 +200,23 @@ class Aligner(nn.Module):
             while len(src_agg_field.shape) < 4:
                 src_agg_field = src_agg_field.unsqueeze(0)
 
+        # Skip alignment in case of empty source or target image
+        if (src_img.sum() == 0) or (tgt_img.sum() == 0):
+            if src_agg_field is None:
+                shape = list(src_img.shape)
+                shape[1] = 2
+                pred_res = torchfields.Field.zeros(
+                    shape, dtype=src_img.dtype, device=src_img.device
+                )
+            else:
+                pred_res = torch.field(src_agg_field)
+
+            if return_state:
+                return pred_res, self.net.state
+            else:
+                return pred_res
+
+        if src_agg_field is not None:
             src_agg_field = src_agg_field.field().from_pixels()
             warped_src_img = src_agg_field(src_img)
             src_agg_field = src_agg_field.pixels()
