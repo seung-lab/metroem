@@ -53,23 +53,25 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     elif opt_mode == 'sgd':
         optimizer = torch.optim.SGD(trainable, lr=lr, **opt_params)
 
-    tgt_zeros = tgt[:, 0] == 0
-    src_zeros = src[:, 0] == 0
-
     if normalize:
         with torch.no_grad():
-            src = helpers.normalize(src, mask=src!=0, mask_fill=0)
-            tgt = helpers.normalize(tgt, mask=tgt!=0, mask_fill=0)
+            src_mask = torch.logical_not(src_defects)
+            tgt_mask = torch.logical_not(tgt_defects)
+
+            while src_mask.ndim < src.ndim:
+                src_mask.unsqueeze_(0)
+            while tgt_mask.ndim < src.ndim:
+                tgt_mask.unsqueeze_(0)
+
+            src = helpers.normalize(src, mask=src_mask, mask_fill=0)
+            tgt = helpers.normalize(tgt, mask=tgt_mask, mask_fill=0)
 
     loss_bundle = {
         'src': src,
         'tgt': tgt,
+        'src_defects': src_defects,
         'tgt_defects': tgt_defects,
-        'src_zeros': src_zeros,
-        'tgt_zeros': tgt_zeros
     }
-
-    loss_bundle['src_defects'] = src_defects
 
     prev_loss = []
     s = time.time()
