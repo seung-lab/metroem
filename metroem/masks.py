@@ -73,8 +73,8 @@ def warp_prewarp_mask(prewarp_result, res, do_nothing=False, inv=False):
     if do_nothing:
         result = prewarp_result
     else:
-        if ((res != 0).sum() > 0) and not inv:
-            result = res.from_pixels()(prewarp_result)
+        if not inv:
+            result = res.from_pixels().sample(prewarp_result, padding_mode='border')
         else:
             result = prewarp_result
     return result
