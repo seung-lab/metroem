@@ -14,7 +14,7 @@ def combine_pre_post(res, pre, post):
 def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       src_defects,
                       tgt_defects,
-                      opt_params={},
+                      opt_params=None,
                       opt_mode='adam',
                       crop=16,
                       noimpr_period=50,
@@ -23,11 +23,18 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       l2=1e-4,
                       normalize=True,
                       optimize_init=False,
-                      sm_keys_to_apply={},
-                      mse_keys_to_apply={},
+                      sm_keys_to_apply=None,
+                      mse_keys_to_apply=None,
                       verbose=False,
                       max_bad=15
                     ):
+    if opt_params is None:
+        opt_params = {}
+    if sm_keys_to_apply is None:
+        sm_keys_to_apply = {}
+    if mse_keys_to_apply is None:
+        mse_keys_to_apply = {}
+
     opti_loss = unsupervised_loss(
           smoothness_factor=sm, use_defect_mask=True,
           sm_keys_to_apply=sm_keys_to_apply,
