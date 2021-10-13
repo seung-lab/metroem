@@ -183,19 +183,17 @@ def rigidity(field, power=2, diagonal_mult=1.0):
     delta = torch.conv2d(field_abs, diff_ker, padding = [1,1])
     delta = delta.permute(1, 2, 3, 0)
 
-    delta_sq = torch.pow(delta, 2) + 1e-8
-    delta_sq_sum = torch.sum(delta_sq, 3)
+    spring_lengths = torch.norm(delta, dim=3)
 
-    spring_lengths = torch.sqrt(delta_sq_sum)
     spring_defs = torch.cat([spring_lengths[0:4, :, :] - 1, 
                              (spring_lengths[4:8, :, :] - 2**(1/2)) * (diagonal_mult)**(1/power)], 0)
 
     if power != 2:
         spring_defs = spring_defs.abs()
 
-    spring_energies = torch.pow(spring_defs, power)
+    # Slightly faster than sum() + pow(), and no need for abs() if power is odd
+    result = torch.norm(spring_defs, p=power, dim=0).pow(power)
 
-    result = torch.sum(spring_energies, 0)
     total = 4 + 4 * diagonal_mult
 
     result /= total
