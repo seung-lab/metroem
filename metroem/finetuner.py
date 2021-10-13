@@ -1,6 +1,7 @@
 import torch
 import time
 import numpy as np
+import torchfields
 
 from metroem import helpers
 from metroem.loss import unsupervised_loss
@@ -32,21 +33,13 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
           sm_keys_to_apply=sm_keys_to_apply,
           mse_keys_to_apply=mse_keys_to_apply
       )
-    pred_res = initial_res.clone().detach().field()
+    pred_res = initial_res.detach().field()
     pred_res = pred_res.down(opt_res_coarsness)
-    if optimize_init:
-        pred_res.requires_grad = True
-    else:
-        pred_res.requires_grad = False
+    pred_res.requires_grad = optimize_init
 
-    pre_res = torch.zeros_like(pred_res, device=pred_res.device).field().detach()
-    post_res = torch.zeros_like(pre_res, device=pred_res.device).field().detach()
+    pre_res = torchfields.Field.zeros_like(pred_res, device=pred_res.device, requires_grad=True)
+    post_res = torchfields.Field.zeros_like(pred_res, device=pred_res.device, requires_grad=True)
 
-    prev_pre_res = torch.zeros_like(pre_res, device=pred_res.device).field().detach()
-    prev_post_res = torch.zeros_like(pre_res, device=pred_res.device).field().detach()
-
-    for t in [pre_res, post_res, prev_pre_res, prev_post_res]:
-        t.requires_grad = True
     trainable = [pre_res, post_res]
     if opt_mode == 'adam':
         optimizer = torch.optim.Adam(trainable, lr=lr, weight_decay=wd)
@@ -79,13 +72,13 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res).up(opt_res_coarsness)
     loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
     loss_dict = opti_loss(loss_bundle, crop=crop)
-    best_loss = loss_dict['result'].cpu().detach().numpy()
+    best_loss = loss_dict['result'].detach().cpu().numpy()
     new_best_ago = 0
     lr_halfed_count = 0
     no_impr_count = 0
     new_best_count = 0
     if verbose:
-        print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
+        print (loss_dict['result'].detach().cpu().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
 
     for epoch in range(num_iter):
         loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res).up(opt_res_coarsness)
@@ -93,13 +86,11 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
         loss_dict = opti_loss(loss_bundle, crop=crop)
         loss_var = loss_dict['result']
         loss_var += (loss_bundle['pred_res']**2).mean() * l2
-        curr_loss = loss_var.cpu().detach().numpy()
+        curr_loss = loss_var.detach().cpu().numpy()
 
         min_improve = 1e-11
         if curr_loss + min_improve <= best_loss:
             # Improvement
-            prev_pre_res = pre_res.clone()
-            prev_post_res = post_res.clone()
             best_loss = curr_loss
             new_best_count += 1
             new_best_ago = 0
@@ -125,14 +116,14 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
         if lr_halfed_count >= max_bad:
             break
 
-    loss_bundle['pred_res'] = combine_pre_post(pred_res, prev_pre_res, prev_post_res).up(opt_res_coarsness)
+    loss_bundle['pred_res'] = combine_pre_post(pred_res, pre_res, post_res).up(opt_res_coarsness)
     loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
     loss_dict = opti_loss(loss_bundle, crop=crop)
 
     e = time.time()
     if verbose:
         print ("New best: {}, No impr: {}, Iter: {}".format(new_best_count, no_impr_count, epoch))
-        print (loss_dict['result'].cpu().detach().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
+        print (loss_dict['result'].detach().cpu().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
         print (e - s)
         print ('==========')
 
