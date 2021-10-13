@@ -97,18 +97,6 @@ def binarize(img, bin_setting):
 
 
 def get_mse_and_smoothness_masks(bundle, mse_keys_to_apply, sm_keys_to_apply, **kwargs):
-    if "src" not in mse_keys_to_apply:
-        mse_keys_to_apply["src"] = []
-    if "tgt" not in mse_keys_to_apply:
-        mse_keys_to_apply["tgt"] = []
-    if "src" not in sm_keys_to_apply:
-        sm_keys_to_apply["src"] = []
-    if "tgt" not in sm_keys_to_apply:
-        sm_keys_to_apply["tgt"] = []
-    return get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply)
-
-
-def get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply):
     src_shape = bundle["src"].shape
     if len(src_shape) == 4:
         mask_shape = (src_shape[0], 1, src_shape[2], src_shape[3])
