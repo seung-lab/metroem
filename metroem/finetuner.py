@@ -19,7 +19,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       crop=16,
                       noimpr_period=50,
                       opt_res_coarsness=0,
-                      wd=1e-4,
+                      wd=0,
                       l2=1e-4,
                       normalize=True,
                       optimize_init=False,
@@ -103,7 +103,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                 lr_halfed_count += 1
 
                 if opt_mode == 'adam':
-                    optimizer = torch.optim.Adam([pre_res, post_res], lr=lr)
+                    optimizer = torch.optim.Adam([pre_res, post_res], lr=lr, weight_decay=wd)
                 elif opt_mode == 'sgd':
                     optimizer = torch.optim.SGD([pre_res, post_res], lr=lr, **opt_params)
                 new_best_ago -= 5
