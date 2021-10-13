@@ -121,7 +121,10 @@ def get_mse_and_smoothness_masks(bundle, mse_keys_to_apply, sm_keys_to_apply, **
             bundle["src_mask_mse_prewarp"] = get_prewarp_mask(
                 bundle, mse_keys_to_apply["src"]
             )
-        src_mask_mse = warp_prewarp_mask(bundle["src_mask_mse_prewarp"], pred_res)
+        if bundle["src_mask_mse_prewarp"].min() == bundle["src_mask_mse_prewarp"].max():
+            src_mask_mse = bundle["src_mask_mse_prewarp"]
+        else:
+            src_mask_mse = warp_prewarp_mask(bundle["src_mask_mse_prewarp"], pred_res)
         mask_mse *= src_mask_mse
 
     if "tgt" in mse_keys_to_apply:
@@ -139,7 +142,10 @@ def get_mse_and_smoothness_masks(bundle, mse_keys_to_apply, sm_keys_to_apply, **
             bundle["src_mask_sm_prewarp"] = get_prewarp_mask(
                 bundle, sm_keys_to_apply["src"]
             )
-        src_mask_sm = warp_prewarp_mask(bundle["src_mask_sm_prewarp"], pred_res)
+        if bundle["src_mask_sm_prewarp"].min() == bundle["src_mask_sm_prewarp"].max():
+            src_mask_sm = bundle["src_mask_sm_prewarp"]
+        else:
+            src_mask_sm = warp_prewarp_mask(bundle["src_mask_sm_prewarp"], pred_res)
         mask_sm *= src_mask_sm
 
     if "tgt" in sm_keys_to_apply:
