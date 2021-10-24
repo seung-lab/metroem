@@ -3,7 +3,7 @@ scikit-image
 alabaster==0.7.12
 artificery==0.0.3.2
 attrs==20.3.0
-Babel==2.9.0
+Babel==2.9.1
 beautifulsoup4==4.9.3
 bleach==3.3.0
 boto3==1.17.20
