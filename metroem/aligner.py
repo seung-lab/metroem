@@ -22,41 +22,48 @@ def finetune_field(
     num_iter=60,
     crop=1
 ):
+    # TODO: Allow alignment to override keys_to_apply.
+    #
+    # NOTE: * "coarsening" not required if defects are max-pooled
+    #         in EM MIP hierarchy
+    #       * target defect smoothness mask not required
+    #         unless propagating defects is desired, e.g. for
+    #         pairwise alignment(?)
     mse_keys_to_apply = {
         'src': [
             {
                 'name': 'src_defects',
                 'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
+                # 'coarsen_ranges': [(1, 0)]
              }
             ],
         'tgt':[
             {
                 'name': 'tgt_defects',
                 'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
+                # 'coarsen_ranges': [(1, 0)]
             }
         ]
     }
 
     sm_keys_to_apply = {
        "src": [
-         {
-             "name": "src_defects",
-             "mask_value": 1.0e-5,
-             "binarization": {"strat": "eq", "value": 0},
-             'coarsen_ranges': [(1, 0)]
-         }
-       ],
-       "tgt": [
             {
-                'name': 'tgt_defects',
-                'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
-             }
-       ]
+                "name": "src_defects",
+                "mask_value": 1.0e-5,
+                "binarization": {"strat": "eq", "value": 0},
+                # 'coarsen_ranges': [(1, 0)]
+            },
 
-   }
+        ],
+    #    "tgt": [
+    #         {
+    #             'name': 'tgt_defects',
+    #             'binarization': {'strat': 'eq', 'value': 0},
+    #             # 'coarsen_ranges': [(1, 0)]
+    #          }
+    #    ]
+    }
 
 
     src_small_defects = None
