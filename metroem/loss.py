@@ -136,7 +136,7 @@ def pix_identity(size, batch=1, device='cuda'):
     result = torch.transpose(result, 1, 2)
     return result
 
-def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
+def rigidity(field, power=2, diagonal_mult=1.0):
     field = field.permute(0, 2, 3, 1)
     identity = pix_identity(size=field.shape[-2], device=field.device)
     field_abs = field + identity
@@ -148,66 +148,52 @@ def rigidity(field, power=2, diagonal_mult=0.8, two_diagonals=True):
            [-1, 1, 0],
            [ 0, 0, 0]],
 
-          [[ 0, 0, 0],
-           [ 0, 1, -1],
-           [ 0, 0, 0]],
-
           [[ 0,-1, 0],
            [ 0, 1, 0],
            [ 0, 0, 0]],
-
-          [[ 0, 0, 0],
-           [ 0, 1, 0],
-           [ 0,-1, 0]],
 
           [[-1, 0, 0],
            [ 0, 1, 0],
            [ 0, 0, 0]],
 
-          [[ 0, 0, 0],
-           [ 0, 1, 0],
-           [ 0, 0,-1]],
-
           [[ 0, 0,-1],
            [ 0, 1, 0],
            [ 0, 0, 0]],
-
-          [[ 0, 0, 0],
-           [ 0, 1, 0],
-           [-1, 0, 0]],
-          ]
+        ]
     ], dtype=field_abs.dtype, device=field_abs.device)
 
     diff_ker = diff_ker.permute(1, 0, 2, 3)
 
-    delta = torch.conv2d(field_abs, diff_ker, padding = [1,1])
+    delta = torch.conv2d(field_abs, diff_ker, padding = [2, 2])
     delta = delta.permute(1, 2, 3, 0)
 
-    delta_sq = torch.pow(delta, 2) + 1e-8
-    delta_sq_sum = torch.sum(delta_sq, 3)
+    spring_lengths = torch.norm(delta, dim=3)
 
-    spring_lengths = torch.sqrt(delta_sq_sum)
-    spring_defs = torch.cat([spring_lengths[0:4, :, :] - 1, 
-                             (spring_lengths[4:8, :, :] - 2**(1/2)) * (diagonal_mult)**(1/power)], 0)
+    spring_defs = torch.stack([
+        spring_lengths[0, 1:-1, 1:-1] - 1,
+        spring_lengths[0, 1:-1, 2:  ] - 1,
 
-    if power != 2:
-        spring_defs = spring_defs.abs()
+        spring_lengths[1, 1:-1, 1:-1] - 1,
+        spring_lengths[1, 2:  , 1:-1] - 1,
 
-    spring_energies = torch.pow(spring_defs, power)
+        (spring_lengths[2, 1:-1, 1:-1] - 2**(1/2)) * (diagonal_mult)**(1/power),
+        (spring_lengths[2, 2:  , 2:  ] - 2**(1/2)) * (diagonal_mult)**(1/power),
 
-    if two_diagonals:
-        result = torch.sum(spring_energies, 0)
-        total = 4 + 4 * diagonal_mult
-    else:
-        result = torch.sum(spring_energies[0:6, :, :], 0)
-        total = 4 + 2 * diagonal_mult
+        (spring_lengths[3, 1:-1, 1:-1] - 2**(1/2)) * (diagonal_mult)**(1/power),
+        (spring_lengths[3, 2: ,  0:-2] - 2**(1/2)) * (diagonal_mult)**(1/power),
+    ])
+
+    # Slightly faster than sum() + pow(), and no need for abs() if power is odd
+    result = torch.norm(spring_defs, p=power, dim=0).pow(power)
+
+    total = 4 + 4 * diagonal_mult
 
     result /= total
 
-    #remove incorrect smoothness values caused by 1px zero padding
+    # Remove incorrect smoothness values caused by 2px zero padding
     result[..., 0:2, :] = 0
     result[..., -2:, :] = 0
-    result[..., :,  0:2] = 0
+    result[..., :, 0:2] = 0
     result[..., :, -2:] = 0
 
     return result.squeeze()
