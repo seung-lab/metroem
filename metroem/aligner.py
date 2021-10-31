@@ -21,6 +21,7 @@ def finetune_field(
     sm=300e0,
     num_iter=60,
     sm_mask_coarsening=[],
+    sm_mask_value=1e-5,
     crop=1
 ):
     # TODO: Allow alignment to override keys_to_apply.
@@ -51,7 +52,7 @@ def finetune_field(
        "src": [
             {
                 "name": "src_defects",
-                "mask_value": 1.0e-5,
+                "mask_value": sm_mask_value,
                 "binarization": {"strat": "eq", "value": 0},
                 'coarsen_ranges': sm_mask_coarsening
             },
@@ -169,6 +170,7 @@ class Aligner(nn.Module):
         finetune_lr=1e-1,
         finetune_sm=30e0,
         sm_mask_coarsening=[(1, 0)],
+        sm_mask_value=1e-5,
         train=False,
         crop=1,
     ):
@@ -179,6 +181,7 @@ class Aligner(nn.Module):
         self.net.name = checkpoint_name
         self.finetune = finetune
         self.sm_mask_coarsening = sm_mask_coarsening
+        self.sm_mask_value = sm_mask_value
         self.pass_field = pass_field
         self.finetune_iter = finetune_iter
         self.finetune_lr = finetune_lr
@@ -275,6 +278,7 @@ class Aligner(nn.Module):
                 num_iter=finetune_iter,
                 sm=finetune_sm,
                 crop=self.crop,
+                sm_mask_value=sm_mask_value,
                 sm_mask_coarsening=self.sm_mask_coarsening
             )
         if return_state:

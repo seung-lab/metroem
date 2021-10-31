@@ -14,7 +14,6 @@ def get_prewarp_mask(bundle, keys_to_apply, inv=False):
     )
 
     for settings in keys_to_apply:
-
         name = settings["name"]
 
         name_in_bundle = bundle.get(name)
