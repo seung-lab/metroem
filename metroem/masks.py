@@ -73,8 +73,8 @@ def warp_prewarp_mask(prewarp_result, res, do_nothing=False, inv=False):
     if do_nothing:
         result = prewarp_result
     else:
-        if ((res != 0).sum() > 0) and not inv:
-            result = res.from_pixels()(prewarp_result)
+        if not inv:
+            result = res.from_pixels().sample(prewarp_result, padding_mode='border')
         else:
             result = prewarp_result
     return result
@@ -97,18 +97,6 @@ def binarize(img, bin_setting):
 
 
 def get_mse_and_smoothness_masks(bundle, mse_keys_to_apply, sm_keys_to_apply, **kwargs):
-    if "src" not in mse_keys_to_apply:
-        mse_keys_to_apply["src"] = []
-    if "tgt" not in mse_keys_to_apply:
-        mse_keys_to_apply["tgt"] = []
-    if "src" not in sm_keys_to_apply:
-        sm_keys_to_apply["src"] = []
-    if "tgt" not in sm_keys_to_apply:
-        sm_keys_to_apply["tgt"] = []
-    return get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply)
-
-
-def get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply):
     src_shape = bundle["src"].shape
     if len(src_shape) == 4:
         mask_shape = (src_shape[0], 1, src_shape[2], src_shape[3])
@@ -133,7 +121,10 @@ def get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply):
             bundle["src_mask_mse_prewarp"] = get_prewarp_mask(
                 bundle, mse_keys_to_apply["src"]
             )
-        src_mask_mse = warp_prewarp_mask(bundle["src_mask_mse_prewarp"], pred_res)
+        if bundle["src_mask_mse_prewarp"].min() == bundle["src_mask_mse_prewarp"].max():
+            src_mask_mse = bundle["src_mask_mse_prewarp"]
+        else:
+            src_mask_mse = warp_prewarp_mask(bundle["src_mask_mse_prewarp"], pred_res)
         mask_mse *= src_mask_mse
 
     if "tgt" in mse_keys_to_apply:
@@ -151,7 +142,10 @@ def get_warped_srctgt_mask(bundle, mse_keys_to_apply, sm_keys_to_apply):
             bundle["src_mask_sm_prewarp"] = get_prewarp_mask(
                 bundle, sm_keys_to_apply["src"]
             )
-        src_mask_sm = warp_prewarp_mask(bundle["src_mask_sm_prewarp"], pred_res)
+        if bundle["src_mask_sm_prewarp"].min() == bundle["src_mask_sm_prewarp"].max():
+            src_mask_sm = bundle["src_mask_sm_prewarp"]
+        else:
+            src_mask_sm = warp_prewarp_mask(bundle["src_mask_sm_prewarp"], pred_res)
         mask_sm *= src_mask_sm
 
     if "tgt" in sm_keys_to_apply:
