@@ -278,7 +278,7 @@ class Aligner(nn.Module):
                 num_iter=finetune_iter,
                 sm=finetune_sm,
                 crop=self.crop,
-                sm_mask_value=sm_mask_value,
+                sm_mask_value=self.sm_mask_value,
                 sm_mask_coarsening=self.sm_mask_coarsening
             )
         if return_state:
