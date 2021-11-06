@@ -5,11 +5,14 @@ from torch.nn.parameter import Parameter
 import os
 import pathlib
 import copy
+from scipy import ndimage
+import numpy as np
 
 import artificery
 import torchfields
 
 from metroem.finetuner import optimize_pre_post_ups
+from metroem import helpers, masks
 
 def finetune_field(
     src,
@@ -17,6 +20,8 @@ def finetune_field(
     pred_res_start,
     src_defects=None,
     tgt_defects=None,
+    src_zeros=None,
+    tgt_zeros=None,
     lr=18e-1,
     sm=300e0,
     num_iter=60,
@@ -34,14 +39,14 @@ def finetune_field(
     mse_keys_to_apply = {
         'src': [
             {
-                'name': 'src_defects',
+                'name': 'src_zeros',
                 'binarization': {'strat': 'eq', 'value': 0},
                 'coarsen_ranges': [(1, 0)]
              }
             ],
         'tgt':[
             {
-                'name': 'tgt_defects',
+                'name': 'tgt_zeros',
                 'binarization': {'strat': 'eq', 'value': 0},
                 'coarsen_ranges': [(1, 0)]
             }
@@ -52,8 +57,8 @@ def finetune_field(
        "src": [
             {
                 "name": "src_defects",
+                'binarization': {'strat': 'eq', 'value': 0},
                 "mask_value": sm_mask_value,
-                "binarization": {"strat": "eq", "value": 0},
                 'coarsen_ranges': sm_mask_coarsening
             },
 
@@ -66,7 +71,6 @@ def finetune_field(
     #          }
     #    ]
     }
-
 
     src_small_defects = None
     src_large_defects = None
@@ -90,12 +94,25 @@ def finetune_field(
         tgt_defects = tgt_defects.squeeze(0)
     else:
         tgt_defects = torch.zeros_like(src_defects)
+
+    if src_zeros is not None:
+        src_zeros = src_zeros.squeeze(0)
+    else:
+        src_zeros = torch.zeros_like(src)
+
+    if tgt_zeros is not None:
+        tgt_zeros = tgt_zeros.squeeze(0)
+    else:
+        tgt_zeros = torch.zeros_like(src)
+
     pred_res_opt = optimize_pre_post_ups(
         src,
         tgt,
         pred_res_start,
         src_defects=src_defects,
         tgt_defects=tgt_defects,
+        src_zeros=src_zeros,
+        tgt_zeros=tgt_zeros,
         crop=crop,
         num_iter=num_iter,
         sm_keys_to_apply=sm_keys_to_apply,
@@ -198,6 +215,8 @@ class Aligner(nn.Module):
             train=None,
             return_state=False,
             final_stage=False,
+            min_defect_thickness=70,
+            min_defect_px=400,
             **kwargs):
 
         if 'cuda' in str(src_img.device):
@@ -260,13 +279,26 @@ class Aligner(nn.Module):
                 finetune_sm = self.finetune_sm
                 if final_stage:
                     finetune_sm *= 10.0e0
+
+
             embeddings = self.net.state['up']['0']['output']
             src_opt = embeddings[0, 1:embeddings.shape[1]//2].unsqueeze(0).detach()
             tgt_opt = embeddings[0, 1+embeddings.shape[1]//2:].unsqueeze(0).detach()
 
-            src_defects = src_img == 0
-            tgt_defects = tgt_img == 0
-            #tgt_defects = None
+            src_zeros = src_img == 0
+            tgt_zeros = tgt_img == 0
+
+            src_zeros_np = helpers.get_np(src_zeros.squeeze()).astype(np.float32)
+            tgt_zeros_np = helpers.get_np(tgt_zeros.squeeze()).astype(np.float32)
+
+            src_tissue_region = ndimage.binary_closing(src_zeros_np == 0, iterations=min_defect_thickness//2)
+            tgt_tissue_region = ndimage.binary_closing(tgt_zeros_np == 0, iterations=min_defect_thickness//2)
+
+            src_defects_np = masks.filter_small(src_zeros_np * src_tissue_region, th=min_defect_px)
+            tgt_defects_np = masks.filter_small(tgt_zeros_np * tgt_tissue_region, th=min_defect_px)
+
+            src_defects = torch.tensor(src_defects_np, device=src_img.device)
+            tgt_defects = torch.tensor(tgt_defects_np, device=tgt_img.device)
 
             pred_res = finetune_field(
                 src_opt,
@@ -274,6 +306,8 @@ class Aligner(nn.Module):
                 pred_res,
                 src_defects=src_defects,
                 tgt_defects=tgt_defects,
+                src_zeros=src_zeros,
+                tgt_zeros=tgt_zeros,
                 lr=finetune_lr,
                 num_iter=finetune_iter,
                 sm=finetune_sm,
@@ -299,12 +333,14 @@ class Aligner(nn.Module):
 
         emb = self.net.state['up'][str(level)]['output']
         img_emb = emb[0, 1:emb.shape[1]//2]
+
         if preserve_zeros:
             mask =  (img == 0).float()
             while mask.shape[-1] > img_emb.shape[-1]:
                 mask = torch.nn.functional.max_pool2d(mask, 2)
             mask = mask != 0
             img_emb[..., mask.squeeze()] = 0
+
         return img_emb
 
     def save_checkpoint(self, checkpoint_folder):

@@ -14,6 +14,8 @@ def combine_pre_post(res, post):
 def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       src_defects,
                       tgt_defects,
+                      src_zeros,
+                      tgt_zeros,
                       opt_params=None,
                       opt_mode='adam',
                       crop=16,
@@ -70,6 +72,8 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
         'tgt': tgt,
         'src_defects': src_defects,
         'tgt_defects': tgt_defects,
+        'src_zeros': src_zeros,
+        'tgt_zeros': tgt_zeros,
     }
 
     prev_loss = []
