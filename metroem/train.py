@@ -153,6 +153,7 @@ def train_module(rank,
 
         optimizer = torch.optim.Adam(trainable, lr=lr, weight_decay=0)
         aligner_train_loop(rank,
+                           world_size,
                            model,
                            mip_in=0,
                            train_loader=train_data_loader,

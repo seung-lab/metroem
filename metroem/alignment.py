@@ -29,6 +29,7 @@ def align_sample(model, bundle, train=False):
 
 
 def aligner_train_loop(rank,
+                       world_size,
                        model,
                        mip_in,
                        train_loader,
@@ -51,6 +52,7 @@ def aligner_train_loop(rank,
 
     if rank == 0:
         aligner_validate_and_save(val_loader,
+                                  world_size,
                                   model,
                                   loss_fn,
                                   mip_in,
@@ -124,9 +126,16 @@ def aligner_train_loop(rank,
 
         if (print_every is None) and (rank == 0):
             train_loss = running_loss / count
-            aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_loss,
-                    times, reverse,
-                    checkpoint_folder=checkpoint_folder)
+            aligner_validate_and_save(val_loader, 
+                                      world_size,
+                                      model, 
+                                      loss_fn, 
+                                      mip_in, 
+                                      epoch, 
+                                      train_loss,
+                                      times, 
+                                      reverse,
+                                      checkpoint_folder=checkpoint_folder)
             times = []
             running_loss = 0.0
         # dist.barrier()
@@ -135,8 +144,16 @@ def aligner_train_loop(rank,
         # model.module.aligner.load_checkpoint(checkpoint_folder, map_location=map_location)
 
 
-def aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_loss, times, reverse,
-                      checkpoint_folder):
+def aligner_validate_and_save(val_loader, 
+                              world_size,
+                              model, 
+                              loss_fn, 
+                              mip_in, 
+                              epoch, 
+                              train_loss, 
+                              times, 
+                              reverse,
+                              checkpoint_folder):
     with torch.set_grad_enabled(False):
         np.random.seed(5566)
         if not val_loader is None:
@@ -154,4 +171,7 @@ def aligner_validate_and_save(val_loader, model, loss_fn, mip_in, epoch, train_l
         print ("Epoch {}: Tra: {:.2E}, {}, T: {:.4}sec".format(epoch, float(train_loss), val_report, np.mean(times)))
 
         sys.stdout.flush()
-        model.module.aligner.save_checkpoint(checkpoint_folder=checkpoint_folder)
+        if world_size > 1:
+            model.module.aligner.save_checkpoint(checkpoint_folder=checkpoint_folder)
+        else:
+            model.aligner.save_checkpoint(checkpoint_folder=checkpoint_folder)
