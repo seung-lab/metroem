@@ -25,7 +25,8 @@ def finetune_field(
     lr=18e-1,
     sm=300e0,
     num_iter=60,
-    sm_mask_coarsening=[],
+    sm_defect_coarsening=[],
+    mse_defect_coarsening=[],
     sm_mask_value=1e-5,
     crop=1
 ):
@@ -37,12 +38,18 @@ def finetune_field(
     #         unless propagating defects is desired, e.g. for
     #         pairwise alignment(?)
     mse_keys_to_apply = {
+
         'src': [
-            {
+             {
                 'name': 'src_zeros',
                 'binarization': {'strat': 'eq', 'value': 0},
                 'coarsen_ranges': [(1, 0)]
-             }
+             },
+             {
+                "name": "src_defects",
+                'binarization': {'strat': 'eq', 'value': 0},
+                'coarsen_ranges': mse_defect_coarsening
+             },
             ],
         'tgt':[
             {
@@ -59,8 +66,14 @@ def finetune_field(
                 "name": "src_defects",
                 'binarization': {'strat': 'eq', 'value': 0},
                 "mask_value": sm_mask_value,
-                'coarsen_ranges': sm_mask_coarsening
+                'coarsen_ranges': sm_defect_coarsening
             },
+            {
+                'name': 'src_zeros',
+                'binarization': {'strat': 'eq', 'value': 0},
+                'coarsen_ranges': [(1, 0)]
+            }
+
 
         ],
     #    "tgt": [
@@ -186,7 +199,8 @@ class Aligner(nn.Module):
         finetune_iter=100,
         finetune_lr=1e-1,
         finetune_sm=30e0,
-        sm_mask_coarsening=[(1, 0)],
+        sm_defect_coarsening=[(1, 0)],
+        mse_defect_coarsening=[(1, 0)],
         sm_mask_value=1e-5,
         min_defect_thickness=70,
         min_defect_px=400,
@@ -199,7 +213,8 @@ class Aligner(nn.Module):
         self.net = create_model(model_folder, checkpoint_name=checkpoint_name)
         self.net.name = checkpoint_name
         self.finetune = finetune
-        self.sm_mask_coarsening = sm_mask_coarsening
+        self.sm_defect_coarsening = sm_defect_coarsening
+        self.mse_defect_coarsening = mse_defect_coarsening
         self.sm_mask_value = sm_mask_value
         self.pass_field = pass_field
         self.finetune_iter = finetune_iter
@@ -315,7 +330,8 @@ class Aligner(nn.Module):
                 sm=finetune_sm,
                 crop=self.crop,
                 sm_mask_value=self.sm_mask_value,
-                sm_mask_coarsening=self.sm_mask_coarsening
+                sm_defect_coarsening=self.sm_defect_coarsening
+                mse_defect_coarsening=self.mse_defect_coarsening
             )
         if return_state:
             return pred_res.field(), self.net.state
