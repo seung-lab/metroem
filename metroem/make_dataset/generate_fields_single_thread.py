@@ -46,7 +46,8 @@ def generate_fields(pyramid_path,
                  dst_dir,
                  src_mip,
                  dst_mip,
-                 device="cuda"):
+                 device="cuda",
+                 restart_index=0):
     """Generate field for image pairs
 
     Args:
@@ -58,6 +59,8 @@ def generate_fields(pyramid_path,
         dst_dir (str): path where temporary field h5s will be stored
         src_mip (int)
         dst_mip (int)
+        device (str)
+        restart_index (int)
     """
     pyramid_path = os.path.expanduser(pyramid_path)
     module_dict = get_pyramid_modules(pyramid_path)
@@ -94,7 +97,7 @@ def generate_fields(pyramid_path,
     #                                        compression='lzf',
     #                                        scaleoffset=2)
 
-    for b in range(n_start, n_stop):
+    for b in range(restart_index, n_stop):
         print('{} / {}'.format(img_dset.shape[0], b))
         src = helpers.to_tensor(img_dset[b, 0], device=device)
         tgt = helpers.to_tensor(img_dset[b, 1], device=device)
@@ -133,7 +136,7 @@ def main():
     parser.add_argument('--stage', type=int)
     parser.add_argument('--src_mip', type=int, help='MIP of input')
     parser.add_argument('--dst_mip', type=int, help='MIP of output')
-    parser.add_argument('--save_intermediary', action='store_true')
+    parser.add_argument('--restart_index', type=int, help='Sample ID for restart', default=0)
 
     parser.set_defaults(redirect_stdout=True)
     args = parser.parse_args()
@@ -178,7 +181,8 @@ def main():
                   dst_dir=args.dst_dir,
                   src_mip=args.src_mip,
                   dst_mip=args.dst_mip,
-                  device="cpu" if args.gpu is None else "cuda")
+                  device="cpu" if args.gpu is None else "cuda",
+                  restart_index=args.restart_index)
 
 
 if __name__ == "__main__":
