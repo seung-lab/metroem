@@ -1,4 +1,5 @@
 import torch
+import time
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 
@@ -281,7 +282,10 @@ class Aligner(nn.Module):
             pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
         else:
             with torch.no_grad():
+                s = time.time()
                 pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
+                e = time.time()
+                print (f"{e - s}secs for net")
                 #print (pred_res.abs().mean())
 
         if not self.pass_field and src_agg_field is not None:
@@ -330,7 +334,7 @@ class Aligner(nn.Module):
                 sm=finetune_sm,
                 crop=self.crop,
                 sm_mask_value=self.sm_mask_value,
-                sm_defect_coarsening=self.sm_defect_coarsening
+                sm_defect_coarsening=self.sm_defect_coarsening,
                 mse_defect_coarsening=self.mse_defect_coarsening
             )
         if return_state:

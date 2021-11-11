@@ -131,6 +131,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     loss_dict = opti_loss(loss_bundle, crop=crop)
 
     e = time.time()
+
     if verbose:
         print ("New best: {}, No impr: {}, Iter: {}".format(new_best_count, no_impr_count, epoch))
         print (loss_dict['result'].detach().cpu().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
