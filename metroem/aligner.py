@@ -277,7 +277,6 @@ class Aligner(nn.Module):
             net_input = torch.cat((src_img, tgt_img), 1).float()
         else:
             net_input = torch.cat((warped_src_img, tgt_img), 1).float()
-
         if (train is None and self.train) or train == True:
             pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
         else:
@@ -288,8 +287,10 @@ class Aligner(nn.Module):
                 print (f"{e - s}secs for net")
                 #print (pred_res.abs().mean())
 
+        pred_res = torch.zeros_like(pred_res, device=pred_res.device)
         if not self.pass_field and src_agg_field is not None:
             pred_res = pred_res.field().from_pixels()(src_agg_field).pixels()
+
 
         if finetune or (finetune is None and self.finetune):
             if finetune_iter is None:
@@ -308,6 +309,8 @@ class Aligner(nn.Module):
 
             src_zeros = src_img == 0
             tgt_zeros = tgt_img == 0
+            src_opt[..., src_zeros.squeeze()] = 0
+            tgt_opt[..., tgt_zeros.squeeze()] = 0
 
             src_zeros_np = helpers.get_np(src_zeros.squeeze()).astype(np.float32)
             tgt_zeros_np = helpers.get_np(tgt_zeros.squeeze()).astype(np.float32)

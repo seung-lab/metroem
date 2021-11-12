@@ -56,8 +56,8 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
     if normalize:
         with torch.no_grad():
-            src_mask = torch.logical_not(src_defects)
-            tgt_mask = torch.logical_not(tgt_defects)
+            src_mask = torch.logical_not(src_zeros)
+            tgt_mask = torch.logical_not(tgt_zeros)
 
             while src_mask.ndim < src.ndim:
                 src_mask.unsqueeze_(0)
@@ -66,7 +66,6 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
             src = helpers.normalize(src, mask=src_mask, mask_fill=0)
             tgt = helpers.normalize(tgt, mask=tgt_mask, mask_fill=0)
-
     loss_bundle = {
         'src': src,
         'tgt': tgt,
