@@ -22,7 +22,6 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       wd=0,
                       l2=1e-4,
                       normalize=True,
-                      optimize_init=False,
                       sm_keys_to_apply=None,
                       mse_keys_to_apply=None,
                       verbose=False,
@@ -41,12 +40,11 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
           mse_keys_to_apply=mse_keys_to_apply
       )
     pred_res = initial_res.detach().field()
-    pred_res = pred_res.down(opt_res_coarsness)
-    pred_res.requires_grad = optimize_init
+    if opt_res_coarsness > 0:
+        pred_res = pred_res.down(opt_res_coarsness)
+    pred_res.requires_grad = True
 
-    post_res = torchfields.Field.zeros_like(pred_res, device=pred_res.device, requires_grad=True)
-
-    trainable = [post_res]
+    trainable = [pred_res]
     if opt_mode == 'adam':
         optimizer = torch.optim.Adam(trainable, lr=lr, weight_decay=wd)
     elif opt_mode == 'sgd':
@@ -75,7 +73,9 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     prev_loss = []
     s = time.time()
 
-    loss_bundle['pred_res'] = combine_pre_post(pred_res, post_res).up(opt_res_coarsness)
+    loss_bundle['pred_res'] = pred_res
+    if opt_res_coarsness > 0:
+        loss_bundle['pred_res'] = loss_bundle['pred_res'].up(opt_res_coarsness)
     loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
     loss_dict = opti_loss(loss_bundle, crop=crop)
     best_loss = loss_dict['result'].detach().cpu().numpy()
@@ -87,11 +87,14 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
         print (loss_dict['result'].detach().cpu().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
 
     for epoch in range(num_iter):
-        loss_bundle['pred_res'] = combine_pre_post(pred_res, post_res).up(opt_res_coarsness)
+        loss_bundle['pred_res'] = pred_res
+        if opt_res_coarsness > 0:
+            loss_bundle['pred_res'] = loss_bundle['pred_res'].up(opt_res_coarsness)
         loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
         loss_dict = opti_loss(loss_bundle, crop=crop)
         loss_var = loss_dict['result']
-        loss_var += (loss_bundle['pred_res']**2).mean() * l2
+        if l2 > 0.0:
+            loss_var += (loss_bundle['pred_res']**2).mean() * l2
         curr_loss = loss_var.detach().cpu().numpy()
 
         min_improve = 1e-11
@@ -109,9 +112,9 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                 lr_halfed_count += 1
 
                 if opt_mode == 'adam':
-                    optimizer = torch.optim.Adam([post_res], lr=lr, weight_decay=wd)
+                    optimizer = torch.optim.Adam(trainable, lr=lr, weight_decay=wd)
                 elif opt_mode == 'sgd':
-                    optimizer = torch.optim.SGD([post_res], lr=lr, **opt_params)
+                    optimizer = torch.optim.SGD(trainable, lr=lr, **opt_params)
                 new_best_ago -= 5
             prev_loss.append(curr_loss)
 
@@ -122,7 +125,9 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
         if lr_halfed_count >= max_bad:
             break
 
-    loss_bundle['pred_res'] = combine_pre_post(pred_res, post_res).up(opt_res_coarsness)
+    loss_bundle['pred_res'] = pred_res
+    if opt_res_coarsness > 0:
+        loss_bundle['pred_res'] = loss_bundle['pred_res'].up(opt_res_coarsness)
     loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
     loss_dict = opti_loss(loss_bundle, crop=crop)
 
