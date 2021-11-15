@@ -137,11 +137,7 @@ def pix_identity(size, batch=1, device='cuda'):
     return result
 
 def rigidity(field, power=2, diagonal_mult=1.0):
-    field = field.permute(0, 2, 3, 1)
-    identity = pix_identity(size=field.shape[-2], device=field.device)
-    field_abs = field + identity
-    field_abs = field_abs.permute(3,0,1,2) #2, 1, 1024, 1024
-
+    # Kernel on Displacement field yields change of displacement
     diff_ker = torch.tensor([
         [
           [[ 0, 0, 0],
@@ -160,12 +156,19 @@ def rigidity(field, power=2, diagonal_mult=1.0):
            [ 0, 1, 0],
            [ 0, 0, 0]],
         ]
-    ], dtype=field_abs.dtype, device=field_abs.device)
+    ], dtype=field.dtype, device=field.device)
 
-    diff_ker = diff_ker.permute(1, 0, 2, 3)
+    diff_ker = diff_ker.permute(1, 0, 2, 3).repeat(2, 1, 1, 1)
 
-    delta = torch.conv2d(field_abs, diff_ker, padding = [2, 2])
-    delta = delta.permute(1, 2, 3, 0)
+    # Add distance between pixel to get absolute displacement
+    diff_bias = torch.tensor(
+        [1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 1.0],
+        dtype=field.dtype,
+        device=field.device,
+    )
+
+    delta = torch.conv2d(field, diff_ker, diff_bias, groups=2, padding=[2, 2])
+    delta = delta.reshape(2, 4, *delta.shape[-2:]).permute(1, 2, 3, 0)
 
     spring_lengths = torch.norm(delta, dim=3)
 
