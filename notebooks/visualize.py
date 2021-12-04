@@ -128,10 +128,9 @@ def display_image(img, x_coords=None, y_coords=None, normalize=False, figsize=(1
         x_coords = [0, img.shape[0]]
     if y_coords is None:
         y_coords = [0, img.shape[1]]
-    vmin = img.min()
-    vmax = img.max()
-    vmin += (vmax - vmin) * 0.3
-    vmax -= (vmax - vmin) * 0.2
+        
+
+    
     fig = None
     if mask:
         fig = plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray')
@@ -141,6 +140,10 @@ def display_image(img, x_coords=None, y_coords=None, normalize=False, figsize=(1
         
         fig = plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]].astype(np.int32), cmap=cmap)
     elif not normalize:
+        vmin = img.min()
+        vmax = img.max()
+        vmin += (vmax - vmin) * 0.3
+        vmax -= (vmax - vmin) * 0.2
         fig = plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray', vmin=vmin, vmax=vmax)
     else:
         fig = plt.imshow(img[x_coords[0]:x_coords[1], y_coords[0]:y_coords[1]], cmap='gray')
@@ -618,8 +621,8 @@ class PyramidVisualizer(object):
 
             
 class simple_visualizer():
-    def __init__(self):
-        pass
+    def __init__(self, norm=True):
+        self.norm = norm
     
     def display_multiimg(self, choice):
         i = self.names.index(choice)
@@ -646,7 +649,7 @@ class simple_visualizer():
         x_coords = (x_section_size * x_section, x_section_size * (x_section + 1))
         y_coords = (y_section_size * y_section, y_section_size * (y_section + 1))
         
-        display_image(img, normalize=True, x_coords=x_coords, y_coords=y_coords)
+        display_image(img, normalize=self.norm, x_coords=x_coords, y_coords=y_coords)
         
     def visualize(self, images, names=None, crop=0, section_count=1, x_section=0, y_section=0):
         if names is None:

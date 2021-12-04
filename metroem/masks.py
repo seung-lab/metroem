@@ -1,8 +1,9 @@
+import cc3d
+import fastremap
+import scipy
 import torch
 import torchfields
-
-import scipy
-
+import numpy as np
 
 def get_prewarp_mask(bundle, keys_to_apply, inv=False):
     if inv == True:
@@ -14,7 +15,6 @@ def get_prewarp_mask(bundle, keys_to_apply, inv=False):
     )
 
     for settings in keys_to_apply:
-
         name = settings["name"]
 
         name_in_bundle = bundle.get(name)
@@ -260,3 +260,14 @@ def closing(a, n=2):
     for _ in range(n):
         result = erode(result != 0)
     return result
+
+
+def filter_small(mask, th=100):
+    cc_labels = cc3d.connected_components(mask != 0)
+    segids, counts = np.unique(cc_labels, return_counts=True)
+    segids = [ segid for segid, ct in zip(segids, counts) if ct > th ]
+
+    filtered_mask = fastremap.mask_except(cc_labels, segids, in_place=True) != 0
+    filtered_mask_c = closing(filtered_mask, n=4)
+
+    return filtered_mask_c
