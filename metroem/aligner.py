@@ -287,7 +287,7 @@ class Aligner(nn.Module):
                 print (f"{e - s}secs for net")
                 #print (pred_res.abs().mean())
 
-        pred_res = torch.zeros_like(pred_res, device=pred_res.device)
+        #pred_res = torch.zeros_like(pred_res, device=pred_res.device)
         if not self.pass_field and src_agg_field is not None:
             pred_res = pred_res.field().from_pixels()(src_agg_field).pixels()
 
