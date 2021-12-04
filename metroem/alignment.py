@@ -63,6 +63,8 @@ def aligner_train_loop(rank,
         count = 0
         s = time.time()
         for bundle in train_loader:
+            if (bundle["src"].sum() == 0) or (bundle["tgt"].sum() == 0):
+                continue
             transform_seed = np.random.randint(10000000)
             np.random.seed(transform_seed)
 

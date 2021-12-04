@@ -118,23 +118,25 @@ def finetune_field(
         tgt_zeros = tgt_zeros.squeeze(0)
     else:
         tgt_zeros = torch.zeros_like(src)
+    
+    with torchfields.set_identity_mapping_cache(True, clear_cache=True):
+      pred_res_opt = optimize_pre_post_ups(
+          src,
+          tgt,
+          pred_res_start,
+          src_defects=src_defects,
+          tgt_defects=tgt_defects,
+          src_zeros=src_zeros,
+          tgt_zeros=tgt_zeros,
+          crop=crop,
+          num_iter=num_iter,
+          sm_keys_to_apply=sm_keys_to_apply,
+          mse_keys_to_apply=mse_keys_to_apply,
+          sm=sm,
+          lr=lr,
+          verbose=True,
+      )
 
-    pred_res_opt = optimize_pre_post_ups(
-        src,
-        tgt,
-        pred_res_start,
-        src_defects=src_defects,
-        tgt_defects=tgt_defects,
-        src_zeros=src_zeros,
-        tgt_zeros=tgt_zeros,
-        crop=crop,
-        num_iter=num_iter,
-        sm_keys_to_apply=sm_keys_to_apply,
-        mse_keys_to_apply=mse_keys_to_apply,
-        sm=sm,
-        lr=lr,
-        verbose=True,
-    )
     return pred_res_opt
 
 def create_model(checkpoint_folder, device='cpu', checkpoint_name="checkpoint"):
