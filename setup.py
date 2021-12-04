@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="metroem",
-    version="0.0.7",
+    version="0.0.9",
     author="Seung Lab",
     author_email="",
     description="Metric learning optimization pyramid for EM alignment",
