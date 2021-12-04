@@ -172,7 +172,6 @@ def train_pyramid(world_size,
 
     prev_mip = None
     print (module_dict)
-    import pdb; pdb.set_trace()
     for stage in sorted(module_dict.keys()):
         module_mip = module_dict[stage]["mip_in"]
         module_path = module_dict[stage]["path"]
