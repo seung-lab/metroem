@@ -14,6 +14,8 @@ def combine_pre_post(res, post):
 def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       src_defects,
                       tgt_defects,
+                      src_zeros,
+                      tgt_zeros,
                       opt_params=None,
                       opt_mode='adam',
                       crop=16,
@@ -54,8 +56,8 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
     if normalize:
         with torch.no_grad():
-            src_mask = torch.logical_not(src_defects)
-            tgt_mask = torch.logical_not(tgt_defects)
+            src_mask = torch.logical_not(src_zeros)
+            tgt_mask = torch.logical_not(tgt_zeros)
 
             while src_mask.ndim < src.ndim:
                 src_mask.unsqueeze_(0)
@@ -64,12 +66,13 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
             src = helpers.normalize(src, mask=src_mask, mask_fill=0)
             tgt = helpers.normalize(tgt, mask=tgt_mask, mask_fill=0)
-
     loss_bundle = {
         'src': src,
         'tgt': tgt,
         'src_defects': src_defects,
         'tgt_defects': tgt_defects,
+        'src_zeros': src_zeros,
+        'tgt_zeros': tgt_zeros,
     }
 
     prev_loss = []
@@ -127,6 +130,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     loss_dict = opti_loss(loss_bundle, crop=crop)
 
     e = time.time()
+
     if verbose:
         print ("New best: {}, No impr: {}, Iter: {}".format(new_best_count, no_impr_count, epoch))
         print (loss_dict['result'].detach().cpu().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
