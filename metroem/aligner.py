@@ -118,7 +118,7 @@ def finetune_field(
         tgt_zeros = tgt_zeros.squeeze(0)
     else:
         tgt_zeros = torch.zeros_like(src)
-    
+
     with torchfields.set_identity_mapping_cache(True, clear_cache=True):
       pred_res_opt = optimize_pre_post_ups(
           src,
@@ -209,6 +209,7 @@ class Aligner(nn.Module):
         min_defect_px=400,
         train=False,
         crop=1,
+        ignore_net_output=False,
     ):
         super().__init__()
 
@@ -227,6 +228,7 @@ class Aligner(nn.Module):
         self.crop = crop
         self.min_defect_thickness = min_defect_thickness
         self.min_defect_px = min_defect_px
+        self.ignore_net_output = ignore_net_output
 
     def forward(self, src_img, tgt_img, src_agg_field=None, tgt_agg_field=None,
             src_folds=None, tgt_folds=None,
@@ -326,6 +328,9 @@ class Aligner(nn.Module):
             src_defects = torch.tensor(src_defects_np, device=src_img.device)
             tgt_defects = torch.tensor(tgt_defects_np, device=tgt_img.device)
 
+            if self.ignore_net_output:
+                pred_res = torch.zeros_like(pred_res, device=pred_res.device)
+
             pred_res = finetune_field(
                 src_opt,
                 tgt_opt,
@@ -343,9 +348,9 @@ class Aligner(nn.Module):
                 mse_defect_coarsening=self.mse_defect_coarsening
             )
         if return_state:
-            return pred_res.field(), self.net.state
+            return pred_res, self.net.state
         else:
-            return pred_res.field()
+            return pred_res
 
     def get_embeddings(self, img, level=0, preserve_zeros=False):
         img = img.squeeze()

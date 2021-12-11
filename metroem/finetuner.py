@@ -2,6 +2,7 @@ import torch
 import time
 import numpy as np
 import torchfields
+from collections import defaultdict
 
 from metroem import helpers
 from metroem.loss import unsupervised_loss
@@ -30,6 +31,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       verbose=False,
                       max_bad=15
                     ):
+    loss_history = defaultdict(lambda: [])
     if opt_params is None:
         opt_params = {}
     if sm_keys_to_apply is None:
@@ -66,6 +68,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
             src = helpers.normalize(src, mask=src_mask, mask_fill=0)
             tgt = helpers.normalize(tgt, mask=tgt_mask, mask_fill=0)
+
     loss_bundle = {
         'src': src,
         'tgt': tgt,
@@ -87,13 +90,17 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     no_impr_count = 0
     new_best_count = 0
     if verbose:
+        #print (loss_dict['result'].detach().cpu().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
         print (loss_dict['result'].detach().cpu().numpy(), loss_dict['similarity'].detach().cpu().numpy(), loss_dict['smoothness'].detach().cpu().numpy())
+
+    loss_history['result'].append(loss_dict['result'].detach().cpu().numpy().item())
 
     for epoch in range(num_iter):
         loss_bundle['pred_res'] = combine_pre_post(pred_res, post_res).up(opt_res_coarsness)
         loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
         loss_dict = opti_loss(loss_bundle, crop=crop)
         loss_var = loss_dict['result']
+        loss_history['result'].append(loss_dict['result'].detach().cpu().numpy().item())
         loss_var += (loss_bundle['pred_res']**2).mean() * l2
         curr_loss = loss_var.detach().cpu().numpy()
 
@@ -137,4 +144,4 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
         print (e - s)
         print ('==========')
 
-    return loss_bundle['pred_res']
+    return loss_history#loss_bundle['pred_res'].field()
