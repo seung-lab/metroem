@@ -23,7 +23,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
                       noimpr_period=50,
                       opt_res_coarsness=0,
                       wd=0,
-                      l2=1e-4,
+                      l2=0,
                       normalize=True,
                       optimize_init=False,
                       sm_keys_to_apply=None,
@@ -106,6 +106,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
         min_improve = 1e-11
         if curr_loss + min_improve <= best_loss:
+
             # Improvement
             best_loss = curr_loss
             new_best_count += 1

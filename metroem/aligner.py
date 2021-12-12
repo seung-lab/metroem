@@ -200,7 +200,7 @@ class Aligner(nn.Module):
         checkpoint_name="checkpoint",
         finetune=False,
         finetune_iter=100,
-        finetune_lr=1e-1,
+        finetune_lr=3e-1,
         finetune_sm=30e0,
         sm_defect_coarsening=[(1, 0)],
         mse_defect_coarsening=[(1, 0)],
