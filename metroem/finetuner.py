@@ -84,7 +84,7 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
     loss_bundle['pred_res'] = combine_pre_post(pred_res, post_res).up(opt_res_coarsness)
     loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
     loss_dict = opti_loss(loss_bundle, crop=crop)
-    best_loss = loss_dict['result'].detach().cpu().numpy()
+    best_loss = loss_dict['result'].detach().cpu().numpy().item()
     new_best_ago = 0
     lr_halfed_count = 0
     no_impr_count = 0
@@ -100,18 +100,18 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
         loss_bundle['pred_tgt'] = loss_bundle['pred_res'].from_pixels()(src)
         loss_dict = opti_loss(loss_bundle, crop=crop)
         loss_var = loss_dict['result']
-        loss_history['result'].append(loss_dict['result'].detach().cpu().numpy().item())
         loss_var += (loss_bundle['pred_res']**2).mean() * l2
-        curr_loss = loss_var.detach().cpu().numpy()
+        curr_loss = loss_var.detach().cpu().numpy().item()
 
         min_improve = 1e-11
         if curr_loss + min_improve <= best_loss:
-
+            loss_history['result'].append(curr_loss)
             # Improvement
             best_loss = curr_loss
             new_best_count += 1
             new_best_ago = 0
         else:
+            loss_history['result'].append(best_loss)
             new_best_ago += 1
             if new_best_ago > noimpr_period:
                 # No improvement, reduce learning rate

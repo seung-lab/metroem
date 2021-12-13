@@ -200,7 +200,7 @@ class Aligner(nn.Module):
         checkpoint_name="checkpoint",
         finetune=False,
         finetune_iter=100,
-        finetune_lr=3e-1,
+        finetune_lr=1e-1,
         finetune_sm=30e0,
         sm_defect_coarsening=[(1, 0)],
         mse_defect_coarsening=[(1, 0)],
@@ -208,7 +208,7 @@ class Aligner(nn.Module):
         min_defect_thickness=70,
         min_defect_px=400,
         train=False,
-        crop=1,
+        crop=128,
         ignore_net_output=False,
     ):
         super().__init__()
