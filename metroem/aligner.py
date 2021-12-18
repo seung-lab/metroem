@@ -72,6 +72,7 @@ def finetune_field(
             {
                 'name': 'src_zeros',
                 'binarization': {'strat': 'eq', 'value': 0},
+                "mask_value": sm_mask_value,
                 'coarsen_ranges': [(1, 0)]
             }
 
@@ -118,7 +119,7 @@ def finetune_field(
         tgt_zeros = tgt_zeros.squeeze(0)
     else:
         tgt_zeros = torch.zeros_like(src)
-    
+
     with torchfields.set_identity_mapping_cache(True, clear_cache=True):
       pred_res_opt = optimize_pre_post_ups(
           src,
