@@ -66,7 +66,7 @@ def finetune_field(
             {
                 "name": "src_defects",
                 'binarization': {'strat': 'eq', 'value': 0},
-                "mask_value": 0.0,
+                "mask_value": sm_mask_value,
                 'coarsen_ranges': sm_defect_coarsening
             },
             {
