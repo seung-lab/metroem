@@ -39,6 +39,7 @@ def finetune_field(
     #         unless propagating defects is desired, e.g. for
     #         pairwise alignment(?)
     mse_keys_to_apply = {
+
         'src': [
              {
                 'name': 'src_zeros',
@@ -65,7 +66,7 @@ def finetune_field(
             {
                 "name": "src_defects",
                 'binarization': {'strat': 'eq', 'value': 0},
-                "mask_value": 0,
+                "mask_value": 0.0,
                 'coarsen_ranges': sm_defect_coarsening
             },
             {
