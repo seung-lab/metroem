@@ -10,6 +10,9 @@ import subprocess
 from torch.nn.parameter import Parameter
 from cloudvolume import CloudVolume
 
+import torch
+from torch.nn.functional import pad
+
 import h5py
 import artificery
 import json
@@ -300,3 +303,123 @@ def normalize(img, per_feature_center=True, per_feature_var=False, eps=1e-8,
 
     return img_out
 
+
+
+def unfold(x, kernel_size, stride):
+    """Separate tensor into (possibly overlapping) square chunks of kernel_size
+
+    Args:
+        x (torch.tensor, 1x1xHxW)
+        kernel_size (int): size of chunk
+        stride (int)
+
+    Returns:
+        torch.tensor, with rough shape
+        1 x 1 x H // stride x W // stride x N // kernel_size x M // kernel_size
+    """
+    # nh, remainder = divmod(x.size(2), kernel_size)
+    # nh += bool(remainder)
+    # nw, remainder = divmod(x.size(3), kernel_size)
+    # nw += bool(remainder)
+    # pad_h, pad_w = (
+    #     (nh + 1) * kernel_size - x.size(2),
+    #     (nw + 1) * kernel_size - x.size(3),
+    # )
+    # pad_h_half = pad_h // 2
+    # pad_w_half = pad_w // 2
+    # x = pad(x, (pad_w_half, pad_w - pad_w_half, pad_h_half, pad_h - pad_h_half))
+    p = (kernel_size - stride) // 2
+    x = pad(x, (p, p, p, p))
+    patches = x.unfold(2, kernel_size, stride).unfold(3, kernel_size, stride)
+    return patches
+
+
+def cpc(S, T, chunk_size, stride, norm=True, device="cpu", ingore_zeros=True):
+    """Compute chunked pearson correlation for source & target. Chunks can be overlapping.
+
+    Args:
+        S (tensor, 1x1xWxH): Source
+        T (tensor, 1x1xWxH): Target
+        chunk_size (int): dim of chunk
+        stride (int): spacing between chunks (no overlap if chunk_size == stride)
+        norm (bool): if true, normalize the correlation
+        device (str): 'cpu' or 'cuda'
+
+    Returns:
+        tensor, 1 x 1 x W // stride, H // stride
+    """
+    S_unfold = unfold(S, kernel_size=chunk_size, stride=stride)
+    T_unfold = unfold(T, kernel_size=chunk_size, stride=stride)
+    mask = torch.zeros_like(S_unfold) > 0
+    if ingore_zeros:
+        mask[S_unfold == 0] = 1
+        mask[T_unfold == 0] = 1
+
+
+    S_hat = S_unfold - S_unfold.mean(dim=(-2, -1), keepdim=True)
+    T_hat = T_unfold - T_unfold.mean(dim=(-2, -1), keepdim=True)
+    S_hat[mask] = 0
+    T_hat[mask] = 0
+    if norm:
+        S_std = torch.norm(S_hat, dim=(-2, -1), keepdim=True)
+        T_std = torch.norm(T_hat, dim=(-2, -1), keepdim=True)
+        P = (S_hat * T_hat)
+
+        R = P.sum(dim=(-2, -1), keepdim=True) / (S_std * T_std)
+    else:
+        R = (S_hat * T_hat).sum(dim=(-2, -1), keepdim=True)
+    return R.reshape(R.shape[:4])
+
+def get_std(S, T, chunk_size, stride, norm=True, device="cpu"):
+    """Compute chunked pearson correlation for source & target. Chunks can be overlapping.
+
+    Args:
+        S (tensor, 1x1xWxH): Source
+        T (tensor, 1x1xWxH): Target
+        chunk_size (int): dim of chunk
+        stride (int): spacing between chunks (no overlap if chunk_size == stride)
+        norm (bool): if true, normalize the correlation
+        device (str): 'cpu' or 'cuda'
+
+    Returns:
+        tensor, 1 x 1 x W // stride, H // stride
+    """
+    S_unfold = unfold(S, kernel_size=chunk_size, stride=stride)
+    T_unfold = unfold(T, kernel_size=chunk_size, stride=stride)
+    S_hat = S_unfold - S_unfold.mean(dim=(-2, -1), keepdim=True)
+    T_hat = T_unfold - T_unfold.mean(dim=(-2, -1), keepdim=True)
+    S_std = torch.norm(S_hat, dim=(-2, -1), keepdim=True)
+    T_std = torch.norm(T_hat, dim=(-2, -1), keepdim=True)
+
+    S_std = S_std.reshape(S_std.shape[:4])
+    T_std = T_std.reshape(T_std.shape[:4])
+
+    return S_std, T_std
+
+def get_zeros(S, T, chunk_size, stride, norm=True, device="cpu"):
+    """Compute chunked pearson correlation for source & target. Chunks can be overlapping.
+
+    Args:
+        S (tensor, 1x1xWxH): Source
+        T (tensor, 1x1xWxH): Target
+        chunk_size (int): dim of chunk
+        stride (int): spacing between chunks (no overlap if chunk_size == stride)
+        norm (bool): if true, normalize the correlation
+        device (str): 'cpu' or 'cuda'
+
+    Returns:
+        tensor, 1 x 1 x W // stride, H // stride
+    """
+    S_unfold = unfold(S, kernel_size=chunk_size, stride=stride)
+    T_unfold = unfold(T, kernel_size=chunk_size, stride=stride)
+    S_z = (S_unfold == 0).float().mean(dim=(-2, -1), keepdim=True)
+    T_z = (T_unfold == 0).float().mean(dim=(-2, -1), keepdim=True)
+    S_z = S_z.reshape(S_z.shape[:4])
+    T_z = T_z.reshape(T_z.shape[:4])
+    return S_z, T_z
+
+
+def unsqueeze_to_4d(x):
+    while len(x.shape) < 4:
+        x = x.unsqueeze(0)
+    return x
