@@ -227,8 +227,9 @@ class Aligner(nn.Module):
         self.min_defect_thickness = min_defect_thickness
         self.min_defect_px = min_defect_px
 
-    def forward(self, src_img, tgt_img, src_agg_field=None, tgt_agg_field=None,
-            src_folds=None, tgt_folds=None,
+    def forward(self, src_img, tgt_img, src_agg_field=None,
+            tgt_agg_field=None,
+            src_defects=None, tgt_defects=None,
             finetune=None,
             finetune_iter=None,
             finetune_lr=None,
@@ -312,18 +313,18 @@ class Aligner(nn.Module):
             tgt_zeros = tgt_img == 0
             src_opt[..., src_zeros.squeeze()] = 0
             tgt_opt[..., tgt_zeros.squeeze()] = 0
+            if src_defects is None:
+                src_zeros_np = helpers.get_np(src_zeros.squeeze()).astype(np.float32)
+                tgt_zeros_np = helpers.get_np(tgt_zeros.squeeze()).astype(np.float32)
 
-            src_zeros_np = helpers.get_np(src_zeros.squeeze()).astype(np.float32)
-            tgt_zeros_np = helpers.get_np(tgt_zeros.squeeze()).astype(np.float32)
+                src_tissue_region = ndimage.binary_closing(src_zeros_np == 0, iterations=self.min_defect_thickness//2)
+                tgt_tissue_region = ndimage.binary_closing(tgt_zeros_np == 0, iterations=self.min_defect_thickness//2)
 
-            src_tissue_region = ndimage.binary_closing(src_zeros_np == 0, iterations=self.min_defect_thickness//2)
-            tgt_tissue_region = ndimage.binary_closing(tgt_zeros_np == 0, iterations=self.min_defect_thickness//2)
+                src_defects_np = masks.filter_small(src_zeros_np * src_tissue_region, th=self.min_defect_px)
+                tgt_defects_np = masks.filter_small(tgt_zeros_np * tgt_tissue_region, th=self.min_defect_px)
 
-            src_defects_np = masks.filter_small(src_zeros_np * src_tissue_region, th=self.min_defect_px)
-            tgt_defects_np = masks.filter_small(tgt_zeros_np * tgt_tissue_region, th=self.min_defect_px)
-
-            src_defects = torch.tensor(src_defects_np, device=src_img.device)
-            tgt_defects = torch.tensor(tgt_defects_np, device=tgt_img.device)
+                src_defects = torch.tensor(src_defects_np, device=src_img.device)
+                tgt_defects = torch.tensor(tgt_defects_np, device=tgt_img.device)
 
             pred_res = finetune_field(
                 src_opt,
