@@ -21,6 +21,8 @@ def finetune_field(
     pred_res_start,
     src_defects=None,
     tgt_defects=None,
+    src_tough=None,
+    tgt_tough=None,
     src_zeros=None,
     tgt_zeros=None,
     lr=18e-1,
@@ -29,6 +31,7 @@ def finetune_field(
     sm_defect_coarsening=[],
     mse_defect_coarsening=[(1, 0)],
     sm_mask_value=1e-5,
+    sm_mask_tough_value=0.05,
     crop=1
 ):
     # TODO: Allow alignment to override keys_to_apply.
@@ -70,6 +73,12 @@ def finetune_field(
                 'coarsen_ranges': [(1, 0)]
             },
             {
+                "name": "src_tough",
+                'binarization': {'strat': 'eq', 'value': 0},
+                "mask_value": sm_mask_tough_value,
+                'coarsen_ranges': [(1, 0)]
+            },
+            {
                 "name": "src_defects",
                 'binarization': {'strat': 'eq', 'value': 0},
                 "mask_value": 0.0,
@@ -85,23 +94,10 @@ def finetune_field(
     #    ]
     }
 
-    src_small_defects = None
-    src_large_defects = None
-
     if src_defects is not None:
         src_defects = src_defects.squeeze(0)
     else:
         src_defects = torch.zeros_like(src)
-
-    if src_small_defects is not None:
-        src_small_defects = src_small_defects.squeeze(0)
-    else:
-        src_small_defects = torch.zeros_like(src)
-
-    if src_large_defects is not None:
-        src_large_defects = src_large_defects.squeeze(0)
-    else:
-        src_large_defects = torch.zeros_like(src)
 
     if tgt_defects is not None:
         tgt_defects = tgt_defects.squeeze(0)
@@ -111,12 +107,22 @@ def finetune_field(
     if src_zeros is not None:
         src_zeros = src_zeros.squeeze(0)
     else:
-        src_zeros = torch.zeros_like(src)
+        src_zeros = torch.zeros_like(src_defects)
 
     if tgt_zeros is not None:
         tgt_zeros = tgt_zeros.squeeze(0)
     else:
-        tgt_zeros = torch.zeros_like(src)
+        tgt_zeros = torch.zeros_like(src_defects)
+
+    if tgt_tough is not None:
+        tgt_tough = tgt_tough.squeeze(0)
+    else:
+        tgt_tough = torch.zeros_like(src_defects)
+
+    if src_tough is not None:
+        src_tough = src_tough.squeeze(0)
+    else:
+        src_tough = torch.zeros_like(src_defects)
 
     with torchfields.set_identity_mapping_cache(True, clear_cache=True):
       pred_res_opt = optimize_pre_post_ups(
@@ -125,6 +131,8 @@ def finetune_field(
           pred_res_start,
           src_defects=src_defects,
           tgt_defects=tgt_defects,
+          src_tough=src_tough,
+          tgt_tough=tgt_tough,
           src_zeros=src_zeros,
           tgt_zeros=tgt_zeros,
           crop=crop,
@@ -204,6 +212,7 @@ class Aligner(nn.Module):
         sm_defect_coarsening=[(1, 0)],
         mse_defect_coarsening=[(1, 0)],
         sm_mask_value=1e-5,
+        sm_mask_tough_value=0.05,
         min_defect_thickness=70,
         min_defect_px=400,
         train=False,
@@ -218,6 +227,7 @@ class Aligner(nn.Module):
         self.sm_defect_coarsening = sm_defect_coarsening
         self.mse_defect_coarsening = mse_defect_coarsening
         self.sm_mask_value = sm_mask_value
+        self.sm_mask_tough_value = sm_mask_tough_value
         self.pass_field = pass_field
         self.finetune_iter = finetune_iter
         self.finetune_lr = finetune_lr
@@ -230,6 +240,7 @@ class Aligner(nn.Module):
     def forward(self, src_img, tgt_img, src_agg_field=None,
             tgt_agg_field=None,
             src_defects=None, tgt_defects=None,
+            src_tough=None, tgt_tough=None,
             finetune=None,
             finetune_iter=None,
             finetune_lr=None,
@@ -313,6 +324,7 @@ class Aligner(nn.Module):
             tgt_zeros = tgt_img == 0
             src_opt[..., src_zeros.squeeze()] = 0
             tgt_opt[..., tgt_zeros.squeeze()] = 0
+
             if src_defects is None:
                 src_zeros_np = helpers.get_np(src_zeros.squeeze()).astype(np.float32)
                 tgt_zeros_np = helpers.get_np(tgt_zeros.squeeze()).astype(np.float32)
@@ -332,6 +344,8 @@ class Aligner(nn.Module):
                 pred_res,
                 src_defects=src_defects,
                 tgt_defects=tgt_defects,
+                src_tough=src_tough,
+                tgt_tough=tgt_tough,
                 src_zeros=src_zeros,
                 tgt_zeros=tgt_zeros,
                 lr=finetune_lr,
@@ -339,6 +353,7 @@ class Aligner(nn.Module):
                 sm=finetune_sm,
                 crop=self.crop,
                 sm_mask_value=self.sm_mask_value,
+                sm_mask_tough_value=self.sm_mask_tough_value,
                 sm_defect_coarsening=self.sm_defect_coarsening,
                 mse_defect_coarsening=self.mse_defect_coarsening
             )

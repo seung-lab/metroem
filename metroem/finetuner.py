@@ -12,17 +12,19 @@ def combine_pre_post(res, post):
     return result
 
 def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
-                      src_defects,
-                      tgt_defects,
                       src_zeros,
                       tgt_zeros,
+                      src_defects=None,
+                      tgt_defects=None,
+                      src_tough=None,
+                      tgt_tough=None,
                       opt_params=None,
                       opt_mode='adam',
                       crop=16,
                       noimpr_period=50,
                       opt_res_coarsness=0,
                       wd=0,
-                      l2=1e-4,
+                      l2=0e-4,
                       normalize=True,
                       sm_keys_to_apply=None,
                       mse_keys_to_apply=None,
@@ -64,15 +66,21 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
             src = helpers.normalize(src, mask=src_mask, mask_fill=0)
             tgt = helpers.normalize(tgt, mask=tgt_mask, mask_fill=0)
+
     loss_bundle = {
         'src': src,
         'tgt': tgt,
-        'src_defects': src_defects,
-        'tgt_defects': tgt_defects,
         'src_zeros': src_zeros,
         'tgt_zeros': tgt_zeros,
     }
-
+    if src_defects is not None:
+        loss_bundle['src_defects'] = src_defects
+    if tgt_defects is not None:
+        loss_bundle['tgt_defects'] = tgt_defects
+    if src_tough is not None:
+        loss_bundle['src_tough'] = src_tough
+    if tgt_tough is not None:
+        loss_bundle['tgt_tough'] = tgt_tough
     prev_loss = []
     s = time.time()
 
