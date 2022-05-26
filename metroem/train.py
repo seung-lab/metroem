@@ -67,18 +67,23 @@ def train_module(rank,
         checkpoint_name (str)
         rank (int): process, dictates the GPU used in multi-gpu training
         world_size (int): total no. of processes
+        use_distributed (bool)
     """
     assert aug_params is None
-    print(f"Running DDP on rank {rank}.")
-    setup(rank, world_size)
-    torch.cuda.set_device(rank)
+    if world_size > 1:
+        print(f"Running DDP on rank {rank}.")
+        setup(rank, world_size)
+        torch.cuda.set_device(rank)
+    else:
+        print(f"Running on single GPU")
     model = modelhouse.load_model_simple(module_path,
                                          finetune=False,
                                          pass_field=True,
                                          checkpoint_name=checkpoint_name)
     checkpoint_path = os.path.join(module_path, "model")
-    model.aligner.net = model.aligner.net.to(rank)
-    model = DDP(model, device_ids=[rank])
+    if world_size > 1:
+        model.aligner.net = model.aligner.net.to(rank)
+        model = DDP(model, device_ids=[rank])
 
     dataset = MultimipDataset(dataset_path, aug_params, field_tag=checkpoint_name)
     train_dset = dataset.get_train_dset(mip=module_mip, stage=stage)
@@ -133,10 +138,12 @@ def train_module(rank,
 
         train_dset.set_size_limit(num_samples)
         # Divide dataset across processes
-        train_sampler = torch.utils.data.distributed.DistributedSampler(
-                                train_dset,
-                                num_replicas=world_size,
-                                rank=rank)
+        train_sampler = None
+        if world_size > 1:
+            train_sampler = torch.utils.data.distributed.DistributedSampler(
+                                    train_dset,
+                                    num_replicas=world_size,
+                                    rank=rank)
         train_data_loader = torch.utils.data.DataLoader(train_dset,
                                                         batch_size=1,
                                                         shuffle=False,
@@ -146,6 +153,7 @@ def train_module(rank,
 
         optimizer = torch.optim.Adam(trainable, lr=lr, weight_decay=0)
         aligner_train_loop(rank,
+                           world_size,
                            model,
                            mip_in=0,
                            train_loader=train_data_loader,
@@ -180,21 +188,28 @@ def train_pyramid(world_size,
         if train_stages is None or stage in train_stages:
             print (f"Training module {stage}...")
             mip_train_params = train_params[str(module_mip)]
-            mp.spawn(train_module,
-                     args=(world_size,
-                           module_path,
-                           mip_train_params, # train_params
-                           dataset_path, # dataset_path
-                           module_mip, # module_mip
-                           stage, # stage
-                           checkpoint_name, # checkpoint_name
-                           None), # aug_params
-                     nprocs=world_size,
-                     join=True)
-           #  train_module(model, train_params=mip_train_params,
-           #          train_dset=dataset.get_train_dset(mip=module_mip, stage=stage),
-           #          val_dset=dataset.get_val_dset(mip=module_mip, stage=stage),
-           #          checkpoint_path=os.path.join(module_path, "model"))
+            if world_size > 1:
+                mp.spawn(train_module,
+                         args=(world_size,
+                               module_path,
+                               mip_train_params, # train_params
+                               dataset_path, # dataset_path
+                               module_mip, # module_mip
+                               stage, # stage
+                               checkpoint_name, # checkpoint_name
+                               None), # aug_params
+                         nprocs=world_size,
+                         join=True)
+            else:
+                train_module(rank=0,
+                             world_size=0,
+                             module_path=module_path, 
+                             train_params=mip_train_params,
+                             dataset_path=dataset_path,
+                             module_mip=module_mip,
+                             stage=stage,
+                             checkpoint_name=checkpoint_name,
+                             aug_params=None)
 
             print (f"Done training module {stage}!")
 
@@ -220,7 +235,7 @@ def main():
     parser.add_argument('--gpu', type=str, default="0")
     parser.add_argument('--train_stages', type=int, default=None, nargs='+')
     parser.add_argument('--generate_field_stages', type=int, default=None, nargs='+')
-    parser.add_argument('--port', type=int, default=8888)
+    # parser.add_argument('--port', type=int, default=8888)
 
     parser.add_argument('--no_redirect_stdout', dest='redirect_stdout',
                         action='store_false')
@@ -244,8 +259,9 @@ def main():
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
 
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = str(args.port)
+    if world_size > 1:
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = str(args.port)
 
     if args.redirect_stdout:
         log_path = os.path.join(args.pyramid_path, f"{args.checkpoint_name}.log")
