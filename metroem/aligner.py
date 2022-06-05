@@ -26,64 +26,71 @@ def finetune_field(
     lr=18e-1,
     sm=300e0,
     num_iter=60,
-    sm_defect_coarsening=[],
-    mse_defect_coarsening=[(1, 0)],
-    sm_mask_value=1e-5,
-    crop=1
+    sm_defect_coarsening=None,   # deprecated
+    mse_defect_coarsening=None,  # deprecated
+    sm_mask_value=1e-5,          # deprecated
+    crop=1,
+    mse_keys_to_apply=None,
+    sm_keys_to_apply=None,
 ):
-    # TODO: Allow alignment to override keys_to_apply.
-    #
     # NOTE: * "coarsening" not required if defects are max-pooled
     #         in EM MIP hierarchy
     #       * target defect smoothness mask not required
     #         unless propagating defects is desired, e.g. for
     #         pairwise alignment(?)
-    mse_keys_to_apply = {
 
-        'src': [
-             {
-                'name': 'src_zeros',
-                'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
-             },
-             {
-                "name": "src_defects",
-                'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': mse_defect_coarsening
-             },
+    if mse_keys_to_apply is None:
+        # Backwards compatibility:
+        # restore old default values / use mse_defect_coarsening
+        if mse_defect_coarsening is None:
+            mse_defect_coarsening = [(1, 0)]
+
+        mse_keys_to_apply = {
+            "src": [
+                {
+                    "name": "src_zeros",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "coarsen_ranges": [(1, 0)],
+                },
+                {
+                    "name": "src_defects",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "coarsen_ranges": mse_defect_coarsening,
+                },
             ],
-        'tgt':[
-            {
-                'name': 'tgt_zeros',
-                'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
-            }
-        ]
-    }
+            "tgt": [
+                {
+                    "name": "tgt_zeros",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "coarsen_ranges": [(1, 0)],
+                },
+            ],
+        }
 
-    sm_keys_to_apply = {
-       "src": [
-            {
-                'name': 'src_zeros',
-                'binarization': {'strat': 'eq', 'value': 0},
-                "mask_value": sm_mask_value,
-                'coarsen_ranges': [(1, 0)]
-            },
-            {
-                "name": "src_defects",
-                'binarization': {'strat': 'eq', 'value': 0},
-                "mask_value": 0.0,
-                'coarsen_ranges': sm_defect_coarsening
-            }
-        ],
-    #    "tgt": [
-    #         {
-    #             'name': 'tgt_defects',
-    #             'binarization': {'strat': 'eq', 'value': 0},
-    #             # 'coarsen_ranges': [(1, 0)]
-    #          }
-    #    ]
-    }
+    if sm_keys_to_apply is None:
+        # Backwards compatibility:
+        # restore old default values / use sm_mask_value and coarsening
+        if sm_mask_value is None:
+            sm_mask_value = 1e-5
+        if sm_defect_coarsening is None:
+            sm_defect_coarsening = []
+
+        sm_keys_to_apply = {
+            "src": [
+                {
+                    "name": "src_zeros",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "mask_value": sm_mask_value,
+                    "coarsen_ranges": [(1, 0)],
+                },
+                {
+                    "name": "src_defects",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "mask_value": 0.0,
+                    "coarsen_ranges": sm_defect_coarsening,
+                },
+            ],
+        }
 
     src_small_defects = None
     src_large_defects = None
@@ -201,13 +208,15 @@ class Aligner(nn.Module):
         finetune_iter=100,
         finetune_lr=1e-1,
         finetune_sm=30e0,
-        sm_defect_coarsening=[(1, 0)],
-        mse_defect_coarsening=[(1, 0)],
-        sm_mask_value=1e-5,
+        sm_defect_coarsening=[(1, 0)],    # deprecated
+        mse_defect_coarsening=[(1, 0)],   # deprecated
+        sm_mask_value=1e-5,               # deprecated
         min_defect_thickness=70,
         min_defect_px=400,
         train=False,
         crop=1,
+        sm_keys_to_apply=None,
+        mse_keys_to_apply=None,
     ):
         super().__init__()
 
@@ -226,6 +235,8 @@ class Aligner(nn.Module):
         self.crop = crop
         self.min_defect_thickness = min_defect_thickness
         self.min_defect_px = min_defect_px
+        self.sm_keys_to_apply = sm_keys_to_apply
+        self.mse_keys_to_apply = mse_keys_to_apply
 
     def forward(self, src_img, tgt_img, src_agg_field=None,
             tgt_agg_field=None,
@@ -340,7 +351,9 @@ class Aligner(nn.Module):
                 crop=self.crop,
                 sm_mask_value=self.sm_mask_value,
                 sm_defect_coarsening=self.sm_defect_coarsening,
-                mse_defect_coarsening=self.mse_defect_coarsening
+                mse_defect_coarsening=self.mse_defect_coarsening,
+                sm_keys_to_apply=self.sm_keys_to_apply,
+                mse_keys_to_apply=self.mse_keys_to_apply,
             )
         if return_state:
             return pred_res.field(), self.net.state
