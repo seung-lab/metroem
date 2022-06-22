@@ -67,7 +67,7 @@ matplotlib==3.4.0rc1
 -e git+https://github.com/supersergiy/scheduler.git@8905783b680cafcebfec52fec7f0e68e4be0e5fd#egg=mazepa
 multiprocess==0.70.11.1
 networkx==2.5
-numpy==1.21.0
+numpy==1.22.0
 -e git+git@github.com:supersergiy/objectscriber.git@66bbecebfe82a381b5f85f35964210a441057c4f#egg=objectscriber
 opencv-python==4.5.1.48
 orjson==3.5.0
