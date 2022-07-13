@@ -217,6 +217,7 @@ class Aligner(nn.Module):
         crop=1,
         sm_keys_to_apply=None,
         mse_keys_to_apply=None,
+        skip_initial_prediction=False,
     ):
         super().__init__()
 
@@ -237,6 +238,7 @@ class Aligner(nn.Module):
         self.min_defect_px = min_defect_px
         self.sm_keys_to_apply = sm_keys_to_apply
         self.mse_keys_to_apply = mse_keys_to_apply
+        self.skip_initial_prediction = skip_initial_prediction
 
     def forward(self, src_img, tgt_img, src_agg_field=None,
             tgt_agg_field=None,
@@ -290,8 +292,11 @@ class Aligner(nn.Module):
             net_input = torch.cat((src_img, tgt_img), 1).float()
         else:
             net_input = torch.cat((warped_src_img, tgt_img), 1).float()
+
         if (train is None and self.train) or train == True:
             pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
+            if self.skip_initial_prediction:
+                pred_res = torch.zeros_like(pred_res)
         else:
             with torch.no_grad():
                 s = time.time()
