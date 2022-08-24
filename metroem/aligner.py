@@ -91,7 +91,6 @@ def finetune_field(
                 },
             ],
         }
-
     src_small_defects = None
     src_large_defects = None
 
@@ -262,13 +261,14 @@ class Aligner(nn.Module):
             while len(src_agg_field.shape) < 4:
                 src_agg_field = src_agg_field.unsqueeze(0)
 
+        field_shape = list(src_img.shape)
+        field_shape[1] = 2
+
         # Skip alignment in case of empty source or target image
         if (src_img.sum() == 0) or (tgt_img.sum() == 0):
             if src_agg_field is None:
-                shape = list(src_img.shape)
-                shape[1] = 2
                 pred_res = torchfields.Field.zeros(
-                    shape, dtype=src_img.dtype, device=src_img.device
+                    field_shape, dtype=torch.float, device=src_img.device
                 )
             else:
                 pred_res = torch.field(src_agg_field)
@@ -290,15 +290,18 @@ class Aligner(nn.Module):
         else:
             net_input = torch.cat((warped_src_img, tgt_img), 1).float()
 
-        if (train is None and self.train) or train == True:
-            pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
-            if self.skip_initial_prediction:
-                pred_res = torch.zeros_like(pred_res)
+        if self.skip_initial_prediction:
+            pred_res = torch.Field.zeros(
+                field_shape, dtype=torch.float, device=src_img.device
+            )
         else:
-            with torch.no_grad():
+            if (train is None and self.train) or train == True:
                 pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
+            else:
+                with torch.no_grad():
+                    pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
 
-        #pred_res = torch.zeros_like(pred_res, device=pred_res.device)
+
         if not self.pass_field and src_agg_field is not None:
             pred_res = pred_res.field().from_pixels()(src_agg_field).pixels()
 

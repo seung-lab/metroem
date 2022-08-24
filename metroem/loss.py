@@ -166,7 +166,6 @@ def rigidity(field, power=2, diagonal_mult=1.0):
         dtype=field.dtype,
         device=field.device,
     )
-
     delta = torch.conv2d(field, diff_ker, diff_bias, groups=2, padding=[2, 2])
     delta = delta.reshape(2, 4, *delta.shape[-2:]).permute(1, 2, 3, 0)
 
@@ -247,14 +246,10 @@ def similarity_score(bundle, weights=None, crop=32):
         weights = weights
         if crop > 0:
             weights = weights[..., crop:-crop, crop:-crop]
-        total_mse = torch.sum(mse * weights)
-        mask_sum  = torch.sum(weights)
-        if mask_sum == 0:
-            return total_mse
-        else:
-            return total_mse / mask_sum
+        mean_mse = torch.mean(mse * weights)
     else:
-        return torch.mean(mse)
+        mean_mse = torch.mean(mse)
+    return mean_mse
 
 def smoothness_score(bundle, smoothness_type,
                      weights=None, crop=8):
@@ -266,14 +261,10 @@ def smoothness_score(bundle, smoothness_type,
         weights = weights
         if crop > 0:
             weights = weights[..., crop:-crop, crop:-crop]
-        total_sm = torch.sum(pixelwise * weights)
-        mask_sum  = torch.sum(weights)
-        if mask_sum == 0:
-            return total_sm
-        else:
-            return total_sm / mask_sum
+        mean_sm = torch.mean(pixelwise * weights)
     else:
-        return torch.mean(pixelwise)
+        mean_sm = torch.mean(pixelwise)
+    return mean_sm
 
 
 def similarity_sampling_loss(sample_size, unsup_loss, sample_coverage=0.001, min_nonblack=0.5):
