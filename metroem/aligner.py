@@ -140,7 +140,7 @@ def finetune_field(
           mse_keys_to_apply=mse_keys_to_apply,
           sm=sm,
           lr=lr,
-          verbose=True,
+          verbose=False,
       )
 
     return pred_res_opt
@@ -154,7 +154,6 @@ def create_model(checkpoint_folder, device='cpu', checkpoint_name="checkpoint"):
     checkpoint_path = os.path.join(checkpoint_folder,
             f"{checkpoint_name}.state.pth.tar")
     if not os.path.isfile(checkpoint_path):
-        print ("creating new checkpiont...")
         return my_p
 
     load_my_state_dict(my_p,
@@ -204,7 +203,7 @@ class Aligner(nn.Module):
         model_folder,
         pass_field=True,
         checkpoint_name="checkpoint",
-        finetune=False,
+        finetune=True,
         finetune_iter=100,
         finetune_lr=1e-1,
         finetune_sm=30e0,
@@ -220,7 +219,6 @@ class Aligner(nn.Module):
         skip_initial_prediction=False,
     ):
         super().__init__()
-
         this_folder = pathlib.Path(__file__).parent.absolute()
         self.net = create_model(model_folder, checkpoint_name=checkpoint_name)
         self.net.name = checkpoint_name
@@ -251,7 +249,6 @@ class Aligner(nn.Module):
             return_state=False,
             final_stage=False,
             **kwargs):
-
         if 'cuda' in str(src_img.device):
             self.net = self.net.cuda(src_img.device)
         else:
@@ -299,11 +296,7 @@ class Aligner(nn.Module):
                 pred_res = torch.zeros_like(pred_res)
         else:
             with torch.no_grad():
-                s = time.time()
                 pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
-                e = time.time()
-                print (f"{e - s}secs for net")
-                #print (pred_res.abs().mean())
 
         #pred_res = torch.zeros_like(pred_res, device=pred_res.device)
         if not self.pass_field and src_agg_field is not None:
@@ -363,6 +356,7 @@ class Aligner(nn.Module):
         if return_state:
             return pred_res.field(), self.net.state
         else:
+            self.net.state = {}
             return pred_res.field()
 
     def get_embeddings(self, img, level=0, preserve_zeros=False):
