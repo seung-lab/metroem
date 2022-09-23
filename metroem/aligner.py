@@ -26,65 +26,71 @@ def finetune_field(
     lr=18e-1,
     sm=300e0,
     num_iter=60,
-    sm_defect_coarsening=[],
-    mse_defect_coarsening=[(1, 0)],
-    sm_mask_value=1e-5,
-    crop=1
+    sm_defect_coarsening=None,   # deprecated
+    mse_defect_coarsening=None,  # deprecated
+    sm_mask_value=1e-5,          # deprecated
+    crop=1,
+    mse_keys_to_apply=None,
+    sm_keys_to_apply=None,
 ):
-    # TODO: Allow alignment to override keys_to_apply.
-    #
     # NOTE: * "coarsening" not required if defects are max-pooled
     #         in EM MIP hierarchy
     #       * target defect smoothness mask not required
     #         unless propagating defects is desired, e.g. for
     #         pairwise alignment(?)
-    mse_keys_to_apply = {
 
-        'src': [
-             {
-                'name': 'src_zeros',
-                'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
-             },
-             {
-                "name": "src_defects",
-                'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': mse_defect_coarsening
-             },
+    if mse_keys_to_apply is None:
+        # Backwards compatibility:
+        # restore old default values / use mse_defect_coarsening
+        if mse_defect_coarsening is None:
+            mse_defect_coarsening = [(1, 0)]
+
+        mse_keys_to_apply = {
+            "src": [
+                {
+                    "name": "src_zeros",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "coarsen_ranges": [(1, 0)],
+                },
+                {
+                    "name": "src_defects",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "coarsen_ranges": mse_defect_coarsening,
+                },
             ],
-        'tgt':[
-            {
-                'name': 'tgt_zeros',
-                'binarization': {'strat': 'eq', 'value': 0},
-                'coarsen_ranges': [(1, 0)]
-            }
-        ]
-    }
+            "tgt": [
+                {
+                    "name": "tgt_zeros",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "coarsen_ranges": [(1, 0)],
+                },
+            ],
+        }
 
-    sm_keys_to_apply = {
-       "src": [
-            {
-                'name': 'src_zeros',
-                'binarization': {'strat': 'eq', 'value': 0},
-                "mask_value": sm_mask_value,
-                'coarsen_ranges': [(1, 0)]
-            },
-            {
-                "name": "src_defects",
-                'binarization': {'strat': 'eq', 'value': 0},
-                "mask_value": 0.0,
-                'coarsen_ranges': sm_defect_coarsening
-            }
-        ],
-    #    "tgt": [
-    #         {
-    #             'name': 'tgt_defects',
-    #             'binarization': {'strat': 'eq', 'value': 0},
-    #             # 'coarsen_ranges': [(1, 0)]
-    #          }
-    #    ]
-    }
+    if sm_keys_to_apply is None:
+        # Backwards compatibility:
+        # restore old default values / use sm_mask_value and coarsening
+        if sm_mask_value is None:
+            sm_mask_value = 1e-5
+        if sm_defect_coarsening is None:
+            sm_defect_coarsening = []
 
+        sm_keys_to_apply = {
+            "src": [
+                {
+                    "name": "src_zeros",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "mask_value": sm_mask_value,
+                    "coarsen_ranges": [(1, 0)],
+                },
+                {
+                    "name": "src_defects",
+                    "binarization": {"strat": "eq", "value": 0},
+                    "mask_value": 0.0,
+                    "coarsen_ranges": sm_defect_coarsening,
+                },
+            ],
+        }
     src_small_defects = None
     src_large_defects = None
 
@@ -133,7 +139,7 @@ def finetune_field(
           mse_keys_to_apply=mse_keys_to_apply,
           sm=sm,
           lr=lr,
-          verbose=True,
+          verbose=False,
       )
 
     return pred_res_opt
@@ -147,7 +153,6 @@ def create_model(checkpoint_folder, device='cpu', checkpoint_name="checkpoint"):
     checkpoint_path = os.path.join(checkpoint_folder,
             f"{checkpoint_name}.state.pth.tar")
     if not os.path.isfile(checkpoint_path):
-        print ("creating new checkpiont...")
         return my_p
 
     load_my_state_dict(my_p,
@@ -197,20 +202,22 @@ class Aligner(nn.Module):
         model_folder,
         pass_field=True,
         checkpoint_name="checkpoint",
-        finetune=False,
+        finetune=True,
         finetune_iter=100,
         finetune_lr=1e-1,
         finetune_sm=30e0,
-        sm_defect_coarsening=[(1, 0)],
-        mse_defect_coarsening=[(1, 0)],
-        sm_mask_value=1e-5,
+        sm_defect_coarsening=[(1, 0)],    # deprecated
+        mse_defect_coarsening=[(1, 0)],   # deprecated
+        sm_mask_value=1e-5,               # deprecated
         min_defect_thickness=70,
         min_defect_px=400,
         train=False,
         crop=1,
+        sm_keys_to_apply=None,
+        mse_keys_to_apply=None,
+        skip_initial_prediction=False,
     ):
         super().__init__()
-
         this_folder = pathlib.Path(__file__).parent.absolute()
         self.net = create_model(model_folder, checkpoint_name=checkpoint_name)
         self.net.name = checkpoint_name
@@ -226,6 +233,9 @@ class Aligner(nn.Module):
         self.crop = crop
         self.min_defect_thickness = min_defect_thickness
         self.min_defect_px = min_defect_px
+        self.sm_keys_to_apply = sm_keys_to_apply
+        self.mse_keys_to_apply = mse_keys_to_apply
+        self.skip_initial_prediction = skip_initial_prediction
 
     def forward(self, src_img, tgt_img, src_agg_field=None,
             tgt_agg_field=None,
@@ -238,7 +248,6 @@ class Aligner(nn.Module):
             return_state=False,
             final_stage=False,
             **kwargs):
-
         if 'cuda' in str(src_img.device):
             self.net = self.net.cuda(src_img.device)
         else:
@@ -252,13 +261,14 @@ class Aligner(nn.Module):
             while len(src_agg_field.shape) < 4:
                 src_agg_field = src_agg_field.unsqueeze(0)
 
+        field_shape = list(src_img.shape)
+        field_shape[1] = 2
+
         # Skip alignment in case of empty source or target image
         if (src_img.sum() == 0) or (tgt_img.sum() == 0):
             if src_agg_field is None:
-                shape = list(src_img.shape)
-                shape[1] = 2
                 pred_res = torchfields.Field.zeros(
-                    shape, dtype=src_img.dtype, device=src_img.device
+                    field_shape, dtype=torch.float, device=src_img.device
                 )
             else:
                 pred_res = torch.field(src_agg_field)
@@ -279,17 +289,19 @@ class Aligner(nn.Module):
             net_input = torch.cat((src_img, tgt_img), 1).float()
         else:
             net_input = torch.cat((warped_src_img, tgt_img), 1).float()
-        if (train is None and self.train) or train == True:
-            pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
-        else:
-            with torch.no_grad():
-                s = time.time()
-                pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
-                e = time.time()
-                print (f"{e - s}secs for net")
-                #print (pred_res.abs().mean())
 
-        #pred_res = torch.zeros_like(pred_res, device=pred_res.device)
+        if self.skip_initial_prediction:
+            pred_res = torch.Field.zeros(
+                field_shape, dtype=torch.float, device=src_img.device
+            )
+        else:
+            if (train is None and self.train) or train == True:
+                pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
+            else:
+                with torch.no_grad():
+                    pred_res = self.net.forward(x=net_input, in_field=src_agg_field)
+
+
         if not self.pass_field and src_agg_field is not None:
             pred_res = pred_res.field().from_pixels()(src_agg_field).pixels()
 
@@ -340,11 +352,14 @@ class Aligner(nn.Module):
                 crop=self.crop,
                 sm_mask_value=self.sm_mask_value,
                 sm_defect_coarsening=self.sm_defect_coarsening,
-                mse_defect_coarsening=self.mse_defect_coarsening
+                mse_defect_coarsening=self.mse_defect_coarsening,
+                sm_keys_to_apply=self.sm_keys_to_apply,
+                mse_keys_to_apply=self.mse_keys_to_apply,
             )
         if return_state:
             return pred_res.field(), self.net.state
         else:
+            self.net.state = {}
             return pred_res.field()
 
     def get_embeddings(self, img, level=0, preserve_zeros=False):

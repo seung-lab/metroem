@@ -123,6 +123,8 @@ def optimize_pre_post_ups(src, tgt, initial_res, sm, lr, num_iter,
 
         optimizer.zero_grad()
         loss_var.backward()
+
+        torch.nn.utils.clip_grad_norm_(trainable, 0.49)  # attempt to prevent flipped edges
         optimizer.step()
 
         if lr_halfed_count >= max_bad:
