@@ -23,7 +23,7 @@ colorama==0.4.4
 compressed-segmentation==2.0.1
 connected-components-3d==3.1.2
 crc32c==2.2
-cryptography==3.4.6
+cryptography==39.0.1
 cycler==0.10.0
 decorator==4.4.2
 deflate==0.3.0
